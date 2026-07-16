@@ -105,6 +105,8 @@
     font-size:12px;cursor:pointer;color:var(--muted);margin-left:6px;
   }
   .copy-btn:hover{border-color:var(--teal);color:var(--teal-dark);}
+  .wa-cell{display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+  .wa-cell .copy-btn{margin-left:0;}
   .table-wrap{max-height:65vh;overflow:auto;border:1px solid var(--line);border-radius:var(--radius);}
   .empty{padding:40px;text-align:center;color:var(--muted);font-size:14px;}
   .modal-overlay{
@@ -242,7 +244,6 @@
             <tr>
               <th>Nama</th>
               <th>No. WA</th>
-              <th></th>
               <th>Alamat / Kecamatan (Terbaru)</th>
               <th>Tgl Pengerjaan Terbaru</th>
               <th>Jml Order</th>
@@ -250,7 +251,7 @@
             </tr>
           </thead>
           <tbody id="customerTableBody">
-            <tr><td colspan="7" class="empty">Belum ada data. Atur koneksi Google Sheet dulu di "Pengaturan koneksi".</td></tr>
+            <tr><td colspan="6" class="empty">Belum ada data. Atur koneksi Google Sheet dulu di "Pengaturan koneksi".</td></tr>
           </tbody>
         </table>
       </div>
@@ -445,7 +446,7 @@
 
     const body = document.getElementById('customerTableBody');
     if(rows.length===0){
-      body.innerHTML = '<tr><td colspan="7" class="empty">Tidak ada data yang cocok.</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="empty">Tidak ada data yang cocok.</td></tr>';
       renderSummary(rows);
       return;
     }
@@ -453,8 +454,10 @@
     body.innerHTML = rows.map(c=>`
       <tr>
         <td>${escapeHtml(c.nama)}</td>
-        <td>${escapeHtml(c.noWa)}</td>
-        <td><button class="copy-btn" onclick="copyContact('${escapeAttr(c.nama)}','${escapeAttr(c.noWa)}')">Salin</button></td>
+        <td class="wa-cell">
+          <button class="copy-btn" onclick="copyContact('${escapeAttr(c.nama)}','${escapeAttr(c.noWa)}')">Salin</button>
+          <div>${escapeHtml(c.noWa)}</div>
+        </td>
         <td>${escapeHtml(c.alamat||'-')}<div class="sub">${escapeHtml(c.kecamatan||'-')}</div></td>
         <td>${escapeHtml(c.tanggalPengerjaan||'-')}</td>
         <td><span class="chip">${c.jumlahOrder||0}x</span></td>
