@@ -158,7 +158,7 @@
   <section id="tab-form" class="tab-panel active">
     <div class="card">
       <h2>Data Customer</h2>
-      <p class="hint">Jika nomor WhatsApp sudah pernah ada, data lama akan otomatis ditimpa dengan data terbaru ini (dihitung sebagai repeat order).</p>
+      <p class="hint">Jika nomor WhatsApp sudah pernah ada, data lama akan otomatis ditimpa dengan data terbaru ini. Kecuali: jika tanggal pengerjaan yang diinput lebih lama dari tanggal yang sudah tersimpan, input ini akan ditolak dan data lama dipertahankan.</p>
       <form id="customerForm">
         <div class="grid">
           <div class="field">
@@ -338,8 +338,12 @@
     try{
       const res = await postRecords([record]);
       if(res.ok){
-        setMsg('formMsg', 'Tersimpan.', true);
-        document.getElementById('customerForm').reset();
+        if(res.rejectedOldDate > 0){
+          setMsg('formMsg', 'Ditolak: tanggal pengerjaan lebih lama dari data yang sudah tersimpan.', false);
+        } else {
+          setMsg('formMsg', 'Tersimpan.', true);
+          document.getElementById('customerForm').reset();
+        }
       } else {
         setMsg('formMsg', 'Gagal: '+(res.error||'tidak diketahui'), false);
       }
@@ -383,7 +387,7 @@
         try{
           const res = await postRecords(records);
           if(res.ok){
-            setMsg('bulkMsg', `Selesai. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati: ${res.skipped}.`, true);
+            setMsg('bulkMsg', `Selesai. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (no WA kosong): ${res.skipped}, ditolak (tanggal lebih lama): ${res.rejectedOldDate||0}.`, true);
             fileInput.value = '';
           } else {
             setMsg('bulkMsg', 'Gagal: '+(res.error||'tidak diketahui'), false);
