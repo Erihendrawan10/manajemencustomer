@@ -136,6 +136,11 @@
   }
   .summary-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;}
   .summary-value{font-family:'Space Grotesk',system-ui,sans-serif;font-size:22px;font-weight:700;color:var(--teal-dark);}
+  .kec-row{display:flex;align-items:center;gap:12px;padding:7px 0;}
+  .kec-label{width:180px;flex-shrink:0;font-size:13.5px;font-weight:500;}
+  .kec-bar-wrap{flex:1;background:#f0ede4;border-radius:6px;height:10px;overflow:hidden;}
+  .kec-bar{background:var(--teal);height:100%;border-radius:6px;}
+  .kec-count{width:34px;text-align:right;font-size:13px;font-weight:700;color:var(--teal-dark);}
 </style>
 </head>
 <body>
@@ -151,6 +156,7 @@
 <nav class="tabs">
   <button class="active" data-tab="form" onclick="switchTab('form')">Tambah Customer</button>
   <button data-tab="list" onclick="switchTab('list')">Daftar Customer</button>
+  <button data-tab="stats" onclick="switchTab('stats')">Statistik</button>
 </nav>
 
 <main>
@@ -159,7 +165,7 @@
   <section id="tab-form" class="tab-panel active">
     <div class="card">
       <h2>Data Customer</h2>
-      <p class="hint">Jika nomor WhatsApp sudah pernah ada, data lama akan otomatis ditimpa dengan data terbaru ini. Kecuali: jika tanggal pengerjaan yang diinput lebih lama dari tanggal yang sudah tersimpan, input ini akan ditolak dan data lama dipertahankan.</p>
+      <p class="hint">Jika nomor WhatsApp sudah pernah ada, data lama akan otomatis ditimpa dengan data terbaru ini. Input akan ditolak jika: tanggal pengerjaan lebih lama dari data yang sudah tersimpan, atau tanggal pengerjaan berada di masa depan.</p>
       <form id="customerForm">
         <div class="grid">
           <div class="field">
@@ -264,6 +270,37 @@
     </div>
   </section>
 
+  <!-- TAB: STATS -->
+  <section id="tab-stats" class="tab-panel">
+    <div class="card">
+      <h2>Customer Repeat Order Terbanyak</h2>
+      <p class="hint">Diurutkan berdasarkan jumlah order, data keseluruhan (tidak mengikuti filter tab Daftar Customer).</p>
+      <div class="table-wrap" style="max-height:360px;">
+        <table>
+          <thead><tr><th>#</th><th>Nama</th><th>No. WA</th><th>Jml Order</th><th>Total Value</th></tr></thead>
+          <tbody id="statsRepeatBody"><tr><td colspan="5" class="empty">Buka tab ini untuk memuat data.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Customer Value Terbanyak</h2>
+      <p class="hint">Diurutkan berdasarkan total value keseluruhan.</p>
+      <div class="table-wrap" style="max-height:360px;">
+        <table>
+          <thead><tr><th>#</th><th>Nama</th><th>No. WA</th><th>Total Value</th><th>Jml Order</th></tr></thead>
+          <tbody id="statsValueBody"><tr><td colspan="5" class="empty">Buka tab ini untuk memuat data.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Sebaran Alamat Pengerjaan / Kecamatan</h2>
+      <p class="hint">Jumlah customer per kecamatan (berdasarkan kecamatan terbaru masing-masing customer).</p>
+      <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
+    </div>
+  </section>
+
 </main>
 
 <!-- SETTINGS MODAL -->
@@ -295,6 +332,7 @@
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
     document.getElementById('tab-'+name).classList.add('active');
     if(name==='list') loadCustomers();
+    if(name==='stats') loadCustomers().then(renderStats);
   }
 
   // ---------- Settings ----------
@@ -343,7 +381,9 @@
     try{
       const res = await postRecords([record]);
       if(res.ok){
-        if(res.rejectedOldDate > 0){
+        if(res.rejectedFutureDate > 0){
+          setMsg('formMsg', 'Ditolak: tanggal pengerjaan tidak boleh di masa depan.', false);
+        } else if(res.rejectedOldDate > 0){
           setMsg('formMsg', 'Ditolak: tanggal pengerjaan lebih lama dari data yang sudah tersimpan.', false);
         } else {
           setMsg('formMsg', 'Tersimpan.', true);
@@ -392,7 +432,7 @@
         try{
           const res = await postRecords(records);
           if(res.ok){
-            setMsg('bulkMsg', `Selesai. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (no WA kosong): ${res.skipped}, ditolak (tanggal lebih lama): ${res.rejectedOldDate||0}.`, true);
+            setMsg('bulkMsg', `Selesai. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (no WA kosong): ${res.skipped}, ditolak (tanggal lebih lama): ${res.rejectedOldDate||0}, ditolak (tanggal masa depan): ${res.rejectedFutureDate||0}.`, true);
             fileInput.value = '';
           } else {
             setMsg('bulkMsg', 'Gagal: '+(res.error||'tidak diketahui'), false);
@@ -412,6 +452,50 @@
       body: JSON.stringify({ records })
     });
     return await resp.json();
+  }
+
+  function renderStats(){
+    const data = ALL_CUSTOMERS;
+
+    const byRepeat = [...data].sort((a,b)=> (Number(b.jumlahOrder)||0) - (Number(a.jumlahOrder)||0)).slice(0,10);
+    const repeatBody = document.getElementById('statsRepeatBody');
+    repeatBody.innerHTML = byRepeat.length ? byRepeat.map((c,i)=>`
+      <tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(c.nama)}</td>
+        <td>${escapeHtml(c.noWa)}</td>
+        <td><span class="chip">${c.jumlahOrder||0}x</span></td>
+        <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="5" class="empty">Belum ada data.</td></tr>';
+
+    const byValue = [...data].sort((a,b)=> (Number(b.totalValue)||0) - (Number(a.totalValue)||0)).slice(0,10);
+    const valueBody = document.getElementById('statsValueBody');
+    valueBody.innerHTML = byValue.length ? byValue.map((c,i)=>`
+      <tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(c.nama)}</td>
+        <td>${escapeHtml(c.noWa)}</td>
+        <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
+        <td><span class="chip">${c.jumlahOrder||0}x</span></td>
+      </tr>
+    `).join('') : '<tr><td colspan="5" class="empty">Belum ada data.</td></tr>';
+
+    const counts = {};
+    data.forEach(c=>{
+      const k = (c.kecamatan||'').trim() || '(Tidak diisi)';
+      counts[k] = (counts[k]||0) + 1;
+    });
+    const entries = Object.entries(counts).sort((a,b)=> b[1]-a[1]);
+    const maxCount = entries.length ? entries[0][1] : 0;
+    const kecEl = document.getElementById('statsKecamatan');
+    kecEl.innerHTML = entries.length ? entries.map(([k,count])=>`
+      <div class="kec-row">
+        <div class="kec-label">${escapeHtml(k)}</div>
+        <div class="kec-bar-wrap"><div class="kec-bar" style="width:${maxCount ? (count/maxCount*100) : 0}%"></div></div>
+        <div class="kec-count">${count}</div>
+      </div>
+    `).join('') : '<div class="empty">Belum ada data.</div>';
   }
 
   // ---------- List / filter ----------
@@ -501,6 +585,7 @@
   function escapeAttr(s){ return String(s||'').replace(/'/g,"\\'"); }
 
   // init
+  document.getElementById('f-tanggal').max = new Date().toISOString().slice(0,10);
   if(!API_URL){ /* wait for user to open settings */ }
 </script>
 
