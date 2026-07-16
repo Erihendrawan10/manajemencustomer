@@ -124,6 +124,14 @@
   .toast.show{opacity:1;}
   .value-cell{font-variant-numeric:tabular-nums;font-weight:600;}
   .sub{color:var(--muted);font-size:12px;}
+  .summary-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+  @media(max-width:640px){.summary-row{grid-template-columns:1fr;}}
+  .summary-card{
+    background:#f7f5ef;border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;display:flex;flex-direction:column;gap:4px;
+  }
+  .summary-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;}
+  .summary-value{font-family:'Space Grotesk',system-ui,sans-serif;font-size:22px;font-weight:700;color:var(--teal-dark);}
 </style>
 </head>
 <body>
@@ -213,12 +221,28 @@
         <button class="ghost" onclick="clearFilters()">Reset Filter</button>
       </div>
 
+      <div class="summary-row" id="summaryRow">
+        <div class="summary-card">
+          <span class="summary-label">Jumlah Customer</span>
+          <span class="summary-value" id="sumCustomers">0</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Jumlah Order</span>
+          <span class="summary-value" id="sumOrders">0</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Total Value</span>
+          <span class="summary-value" id="sumValue">Rp 0</span>
+        </div>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Nama</th>
               <th>No. WA</th>
+              <th></th>
               <th>Alamat / Kecamatan (Terbaru)</th>
               <th>Tgl Pengerjaan Terbaru</th>
               <th>Jml Order</th>
@@ -226,7 +250,7 @@
             </tr>
           </thead>
           <tbody id="customerTableBody">
-            <tr><td colspan="6" class="empty">Belum ada data. Atur koneksi Google Sheet dulu di "Pengaturan koneksi".</td></tr>
+            <tr><td colspan="7" class="empty">Belum ada data. Atur koneksi Google Sheet dulu di "Pengaturan koneksi".</td></tr>
           </tbody>
         </table>
       </div>
@@ -421,28 +445,38 @@
 
     const body = document.getElementById('customerTableBody');
     if(rows.length===0){
-      body.innerHTML = '<tr><td colspan="6" class="empty">Tidak ada data yang cocok.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="empty">Tidak ada data yang cocok.</td></tr>';
+      renderSummary(rows);
       return;
     }
 
     body.innerHTML = rows.map(c=>`
       <tr>
-        <td>${escapeHtml(c.nama)}
-          <button class="copy-btn" onclick="copyText('${escapeAttr(c.nama)}')">salin</button>
-        </td>
-        <td>${escapeHtml(c.noWa)}
-          <button class="copy-btn" onclick="copyText('${escapeAttr(c.noWa)}')">salin</button>
-        </td>
+        <td>${escapeHtml(c.nama)}</td>
+        <td>${escapeHtml(c.noWa)}</td>
+        <td><button class="copy-btn" onclick="copyContact('${escapeAttr(c.nama)}','${escapeAttr(c.noWa)}')">Salin</button></td>
         <td>${escapeHtml(c.alamat||'-')}<div class="sub">${escapeHtml(c.kecamatan||'-')}</div></td>
         <td>${escapeHtml(c.tanggalPengerjaan||'-')}</td>
         <td><span class="chip">${c.jumlahOrder||0}x</span></td>
         <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
       </tr>
     `).join('');
+
+    renderSummary(rows);
   }
 
-  function copyText(txt){
+  function copyContact(nama, noWa){
+    const txt = `${nama} - ${noWa}`;
     navigator.clipboard.writeText(txt).then(()=>showToast('Disalin: '+txt));
+  }
+
+  function renderSummary(rows){
+    const totalCustomers = rows.length;
+    const totalOrders = rows.reduce((sum,c)=> sum + (Number(c.jumlahOrder)||0), 0);
+    const totalValue = rows.reduce((sum,c)=> sum + (Number(c.totalValue)||0), 0);
+    document.getElementById('sumCustomers').textContent = totalCustomers.toLocaleString('id-ID');
+    document.getElementById('sumOrders').textContent = totalOrders.toLocaleString('id-ID');
+    document.getElementById('sumValue').textContent = 'Rp ' + totalValue.toLocaleString('id-ID');
   }
 
   function escapeHtml(s){
