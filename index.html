@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.1</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.3</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -560,17 +560,38 @@
     document.getElementById(id).addEventListener('input', renderTable);
   });
 
+  function normalizeText_(s){
+    return String(s||'').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeWaFrontend_(raw){
+    let wa = String(raw||'').replace(/[^0-9]/g,'');
+    if(!wa) return '';
+    if(wa.startsWith('62')) return wa;
+    if(wa.startsWith('0')) return '62'+wa.substring(1);
+    if(/^8\d{6,12}$/.test(wa)) return '62'+wa;
+    return wa;
+  }
+
   function renderTable(){
     const from = document.getElementById('filterFrom').value;
     const to = document.getElementById('filterTo').value;
-    const q = document.getElementById('filterSearch').value.trim().toLowerCase();
+    const qRaw = document.getElementById('filterSearch').value;
+    const q = normalizeText_(qRaw);
 
     let rows;
     if(q){
       // Mode pencarian: cari di SELURUH data, abaikan filter tanggal supaya tidak "ketutup".
-      rows = ALL_CUSTOMERS.filter(c =>
-        (c.nama||'').toLowerCase().includes(q) || (c.noWa||'').toLowerCase().includes(q)
-      );
+      const qDigits = q.replace(/[^0-9]/g,'');
+      const qWaNormalized = normalizeWaFrontend_(q);
+      rows = ALL_CUSTOMERS.filter(c => {
+        const namaMatch = normalizeText_(c.nama).includes(q);
+        const waMatch = qDigits && (
+          (c.noWa||'').includes(qDigits) ||
+          (qWaNormalized && (c.noWa||'').includes(qWaNormalized))
+        );
+        return namaMatch || waMatch;
+      });
     } else {
       // Mode filter tanggal.
       rows = ALL_CUSTOMERS.filter(c=>{
@@ -584,7 +605,7 @@
 
     const body = document.getElementById('customerTableBody');
     if(rows.length===0){
-      body.innerHTML = '<tr><td colspan="6" class="empty">Tidak ada data yang cocok.</td></tr>';
+      body.innerHTML = `<tr><td colspan="6" class="empty">Tidak ada data yang cocok. (Total data termuat: ${ALL_CUSTOMERS.length})</td></tr>`;
       renderSummary(rows);
       CURRENT_ROWS = [];
       return;
