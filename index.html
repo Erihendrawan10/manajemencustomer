@@ -318,7 +318,7 @@
 
     <div class="card">
       <h2>Sebaran Kecamatan &amp; Alamat Pengerjaan</h2>
-      <p class="hint">Dikelompokkan per kecamatan (berdasarkan kecamatan terbaru masing-masing customer). Klik salah satu kecamatan untuk melihat alamat pengerjaan yang termasuk di dalamnya.</p>
+      <p class="hint">10 kecamatan dengan jumlah customer terbanyak (berdasarkan kecamatan terbaru masing-masing customer). Klik salah satu kecamatan untuk melihat alamat pengerjaan yang termasuk di dalamnya.</p>
       <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
     </div>
   </section>
@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.4</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.5</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -511,7 +511,7 @@
         if(!groups[k]) groups[k] = [];
         groups[k].push({ nama: String(c.nama||''), alamat: String(c.alamat||'').trim() });
       });
-      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
+      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length).slice(0,10);
       const kecEl = document.getElementById('statsKecamatan');
       kecEl.innerHTML = entries.length ? entries.map(([kecamatan, list])=>`
         <details class="kec-group">
