@@ -255,16 +255,22 @@
           <label>Sampai tanggal pengerjaan</label>
           <input type="date" id="filterTo">
         </div>
-        <div class="field" style="flex:1;min-width:200px;">
+        <button class="primary" onclick="renderTable()">Terapkan Filter Tanggal</button>
+        <button class="ghost" onclick="resetDateFilter()">Reset Tanggal</button>
+        <button class="ghost" onclick="loadCustomers()">Muat Ulang</button>
+      </div>
+
+      <div class="filter-row" style="margin-top:2px;">
+        <div class="field" style="flex:1;min-width:220px;">
           <label>Cari nama / no WA</label>
           <div class="search-with-btn">
             <input type="text" id="filterSearch" placeholder="Ketik untuk mencari..." onkeydown="if(event.key==='Enter') renderTable()">
             <button class="primary" onclick="renderTable()">Cari</button>
+            <button class="ghost" onclick="resetSearch()">Hapus</button>
           </div>
         </div>
-        <button class="ghost" onclick="loadCustomers()">Muat Ulang</button>
-        <button class="ghost" onclick="clearFilters()">Reset Filter</button>
       </div>
+      <p class="hint" style="margin-top:0;">Saat kolom pencarian terisi, hasil pencarian mengabaikan filter tanggal di atas dan mencari ke seluruh data.</p>
 
       <div class="table-wrap">
         <table>
@@ -472,50 +478,53 @@
 
   function renderStats(){
     const data = ALL_CUSTOMERS;
+    try{
+      const byRepeat = [...data].sort((a,b)=> (Number(b.jumlahOrder)||0) - (Number(a.jumlahOrder)||0)).slice(0,10);
+      const repeatBody = document.getElementById('statsRepeatBody');
+      repeatBody.innerHTML = byRepeat.length ? byRepeat.map((c,i)=>`
+        <tr>
+          <td>${i+1}</td>
+          <td>${escapeHtml(c.nama)}</td>
+          <td>${escapeHtml(c.noWa)}</td>
+          <td><span class="chip">${c.jumlahOrder||0}x</span></td>
+          <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" class="empty">Belum ada data.</td></tr>';
 
-    const byRepeat = [...data].sort((a,b)=> (Number(b.jumlahOrder)||0) - (Number(a.jumlahOrder)||0)).slice(0,10);
-    const repeatBody = document.getElementById('statsRepeatBody');
-    repeatBody.innerHTML = byRepeat.length ? byRepeat.map((c,i)=>`
-      <tr>
-        <td>${i+1}</td>
-        <td>${escapeHtml(c.nama)}</td>
-        <td>${escapeHtml(c.noWa)}</td>
-        <td><span class="chip">${c.jumlahOrder||0}x</span></td>
-        <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
-      </tr>
-    `).join('') : '<tr><td colspan="5" class="empty">Belum ada data.</td></tr>';
+      const byValue = [...data].sort((a,b)=> (Number(b.totalValue)||0) - (Number(a.totalValue)||0)).slice(0,10);
+      const valueBody = document.getElementById('statsValueBody');
+      valueBody.innerHTML = byValue.length ? byValue.map((c,i)=>`
+        <tr>
+          <td>${i+1}</td>
+          <td>${escapeHtml(c.nama)}</td>
+          <td>${escapeHtml(c.noWa)}</td>
+          <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
+          <td><span class="chip">${c.jumlahOrder||0}x</span></td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" class="empty">Belum ada data.</td></tr>';
 
-    const byValue = [...data].sort((a,b)=> (Number(b.totalValue)||0) - (Number(a.totalValue)||0)).slice(0,10);
-    const valueBody = document.getElementById('statsValueBody');
-    valueBody.innerHTML = byValue.length ? byValue.map((c,i)=>`
-      <tr>
-        <td>${i+1}</td>
-        <td>${escapeHtml(c.nama)}</td>
-        <td>${escapeHtml(c.noWa)}</td>
-        <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
-        <td><span class="chip">${c.jumlahOrder||0}x</span></td>
-      </tr>
-    `).join('') : '<tr><td colspan="5" class="empty">Belum ada data.</td></tr>';
-
-    const groups = {};
-    data.forEach(c=>{
-      const k = (c.kecamatan||'').trim() || '(Kecamatan belum diisi)';
-      if(!groups[k]) groups[k] = [];
-      groups[k].push({ nama: c.nama, alamat: (c.alamat||'').trim() });
-    });
-    const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
-    const kecEl = document.getElementById('statsKecamatan');
-    kecEl.innerHTML = entries.length ? entries.map(([kecamatan, list])=>`
-      <details class="kec-group">
-        <summary>
-          <span>${escapeHtml(kecamatan)}</span>
-          <span class="chip">${list.length} customer</span>
-        </summary>
-        <ul class="kec-address-list">
-          ${list.map(item=>`<li><span class="addr-name">${escapeHtml(item.nama)}</span> — <span class="addr-text">${escapeHtml(item.alamat || '(alamat belum diisi)')}</span></li>`).join('')}
-        </ul>
-      </details>
-    `).join('') : '<div class="empty">Belum ada data.</div>';
+      const groups = {};
+      data.forEach(c=>{
+        const k = (c.kecamatan||'').trim() || '(Kecamatan belum diisi)';
+        if(!groups[k]) groups[k] = [];
+        groups[k].push({ nama: c.nama, alamat: (c.alamat||'').trim() });
+      });
+      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
+      const kecEl = document.getElementById('statsKecamatan');
+      kecEl.innerHTML = entries.length ? entries.map(([kecamatan, list])=>`
+        <details class="kec-group">
+          <summary>
+            <span>${escapeHtml(kecamatan)}</span>
+            <span class="chip">${list.length} customer</span>
+          </summary>
+          <ul class="kec-address-list">
+            ${list.map(item=>`<li><span class="addr-name">${escapeHtml(item.nama)}</span> — <span class="addr-text">${escapeHtml(item.alamat || '(alamat belum diisi)')}</span></li>`).join('')}
+          </ul>
+        </details>
+      `).join('') : '<div class="empty">Belum ada data. Pastikan sudah ada customer tersimpan di Google Sheet.</div>';
+    }catch(err){
+      document.getElementById('statsKecamatan').innerHTML = '<div class="empty">Gagal menampilkan sebaran: '+escapeHtml(err.message)+'</div>';
+    }
   }
 
   // ---------- List / filter ----------
@@ -534,9 +543,13 @@
     }
   }
 
-  function clearFilters(){
+  function resetDateFilter(){
     document.getElementById('filterFrom').value='';
     document.getElementById('filterTo').value='';
+    renderTable();
+  }
+
+  function resetSearch(){
     document.getElementById('filterSearch').value='';
     renderTable();
   }
@@ -550,12 +563,20 @@
     const to = document.getElementById('filterTo').value;
     const q = document.getElementById('filterSearch').value.trim().toLowerCase();
 
-    let rows = ALL_CUSTOMERS.filter(c=>{
-      if(from && c.tanggalPengerjaan && c.tanggalPengerjaan < from) return false;
-      if(to && c.tanggalPengerjaan && c.tanggalPengerjaan > to) return false;
-      if(q && !((c.nama||'').toLowerCase().includes(q) || (c.noWa||'').includes(q))) return false;
-      return true;
-    });
+    let rows;
+    if(q){
+      // Mode pencarian: cari di SELURUH data, abaikan filter tanggal supaya tidak "ketutup".
+      rows = ALL_CUSTOMERS.filter(c =>
+        (c.nama||'').toLowerCase().includes(q) || (c.noWa||'').toLowerCase().includes(q)
+      );
+    } else {
+      // Mode filter tanggal.
+      rows = ALL_CUSTOMERS.filter(c=>{
+        if(from && c.tanggalPengerjaan && c.tanggalPengerjaan < from) return false;
+        if(to && c.tanggalPengerjaan && c.tanggalPengerjaan > to) return false;
+        return true;
+      });
+    }
 
     rows.sort((a,b)=> (b.tanggalPengerjaan||'').localeCompare(a.tanggalPengerjaan||''));
 
