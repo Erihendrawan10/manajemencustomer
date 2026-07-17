@@ -278,7 +278,7 @@
             <tr>
               <th>Nama</th>
               <th>No. WA <button class="copy-btn header-copy" onclick="copyAllContacts()">Salin Semua</button></th>
-              <th>Alamat / Kecamatan (Terbaru)</th>
+              <th>Alamat Pengerjaan (Terbaru)</th>
               <th>Tgl Pengerjaan Terbaru</th>
               <th>Jml Order</th>
               <th>Total Value</th>
@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.3</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.4</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -507,9 +507,9 @@
 
       const groups = {};
       data.forEach(c=>{
-        const k = (c.kecamatan||'').trim() || '(Kecamatan belum diisi)';
+        const k = String(c.kecamatan||'').trim() || '(Kecamatan belum diisi)';
         if(!groups[k]) groups[k] = [];
-        groups[k].push({ nama: c.nama, alamat: (c.alamat||'').trim() });
+        groups[k].push({ nama: String(c.nama||''), alamat: String(c.alamat||'').trim() });
       });
       const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
       const kecEl = document.getElementById('statsKecamatan');
@@ -559,6 +559,15 @@
   [ 'filterFrom','filterTo','filterSearch' ].forEach(id=>{
     document.getElementById(id).addEventListener('input', renderTable);
   });
+
+  function combineAlamatKecamatan(alamat, kecamatan){
+    const a = String(alamat||'').trim();
+    const k = String(kecamatan||'').trim();
+    if(a && k) return a + ', ' + k;
+    if(a) return a;
+    if(k) return k;
+    return '-';
+  }
 
   function normalizeText_(s){
     return String(s||'').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -615,7 +624,7 @@
       <tr>
         <td>${escapeHtml(c.nama)}</td>
         <td>${escapeHtml(c.noWa)}</td>
-        <td>${escapeHtml(c.alamat||'-')}<div class="sub">${escapeHtml(c.kecamatan||'-')}</div></td>
+        <td>${escapeHtml(combineAlamatKecamatan(c.alamat, c.kecamatan))}</td>
         <td>${escapeHtml(c.tanggalPengerjaan||'-')}</td>
         <td><span class="chip">${c.jumlahOrder||0}x</span></td>
         <td class="value-cell">Rp ${Number(c.totalValue||0).toLocaleString('id-ID')}</td>
