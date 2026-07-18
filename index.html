@@ -317,8 +317,8 @@
     </div>
 
     <div class="card">
-      <h2>Sebaran Kecamatan &amp; Alamat Pengerjaan</h2>
-      <p class="hint">10 kecamatan dengan jumlah customer terbanyak (berdasarkan kecamatan terbaru masing-masing customer). Klik salah satu kecamatan untuk melihat alamat pengerjaan yang termasuk di dalamnya.</p>
+      <h2>Sebaran Kota / Kabupaten</h2>
+      <p class="hint">Dikelompokkan per kota/kabupaten (dideteksi otomatis dari kolom alamat pengerjaan DAN kecamatan yang diinput, area Jabodetabek). Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
       <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
     </div>
   </section>
@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.5</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.7</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -478,6 +478,97 @@
     return await resp.json();
   }
 
+  // Pemetaan kecamatan -> kota/kabupaten untuk area Jabodetabek.
+  // Key dalam huruf kecil tanpa "kec./kecamatan". Kalau tidak ketemu di sini,
+  // akan dikelompokkan sebagai "(Kota/Kabupaten tidak dikenali)".
+  const KECAMATAN_TO_KOTA = (() => {
+    const map = {};
+    const set = (kecList, kota) => kecList.forEach(k => { map[k.toLowerCase()] = kota; });
+
+    set(['beji','bojongsari','cilodong','cimanggis','cinere','cipayung','limo','pancoran mas','sawangan','sukmajaya','tapos'], 'Kota Depok');
+
+    set(['bogor selatan','bogor timur','bogor utara','bogor tengah','bogor barat','tanah sareal'], 'Kota Bogor');
+
+    set(['babakan madang','bojonggede','caringin','cariu','ciampea','ciawi','cibinong','cibungbulang','cigombong','cigudeg','cijeruk','cileungsi','ciomas','cisarua','ciseeng','citeureup','dramaga','gunung putri','gunungputri','gunung sindur','gunungsindur','jasinga','jonggol','kemang','klapanunggal','leuwiliang','leuwisadeng','megamendung','nanggung','pamijahan','parung','parung panjang','parungpanjang','rancabungur','rumpin','sukajaya','sukamakmur','sukaraja','tajurhalang','tamansari','tanjungsari','tenjo','tenjolaya'], 'Kabupaten Bogor');
+
+    set(['tangerang','karawaci','cibodas','periuk','batuceper','benda','cipondoh','pinang','jatiuwung','neglasari','larangan','ciledug','karang tengah','karangtengah'], 'Kota Tangerang');
+
+    set(['cisoka','solear','tigaraksa','jambe','cikupa','panongan','curug','kelapa dua','kelapadua','legok','pagedangan','cisauk','pasar kemis','pasarkemis','sindang jaya','sindangjaya','balaraja','jayanti','sukamulya','kresek','gunung kaler','gunungkaler','kronjo','mekar baru','mekarbaru','mauk','kemiri','sukadiri','rajeg','sepatan','sepatan timur','sepatantimur','pakuhaji','teluknaga','kosambi'], 'Kabupaten Tangerang');
+
+    set(['ciputat','ciputat timur','ciputattimur','pondok aren','pondokaren','serpong','serpong utara','serpongutara','pamulang','setu'], 'Kota Tangerang Selatan');
+
+    set(['bantar gebang','bantargebang','bekasi barat','bekasi selatan','bekasi timur','bekasi utara','jatiasih','jatisampurna','medan satria','medansatria','mustika jaya','mustikajaya','pondok gede','pondokgede','pondok melati','pondokmelati','rawalumbu'], 'Kota Bekasi');
+
+    set(['babelan','cabang bungin','cabangbungin','cikarang barat','cikarang pusat','cikarang selatan','cikarang timur','cikarang utara','cibarusah','cibitung','karang bahagia','karangbahagia','kedungwaringin','muaragembong','pebayuran','serang baru','serangbaru','sukakarya','sukatani','sukawangi','tambelang','tambun selatan','tambunselatan','tambun utara','tambununtara','tarumajaya','bojongmangu'], 'Kabupaten Bekasi');
+
+    set(['gambir','sawah besar','sawahbesar','kemayoran','senen','cempaka putih','cempakaputih','menteng','tanah abang','tanahabang','johar baru','joharbaru'], 'Kota Jakarta Pusat');
+    set(['penjaringan','pademangan','tanjung priok','tanjungpriok','koja','kelapa gading','kelapagading','cilincing'], 'Kota Jakarta Utara');
+    set(['cengkareng','grogol petamburan','grogolpetamburan','taman sari','tamansari','tambora','kebon jeruk','kebonjeruk','kalideres','palmerah','kembangan'], 'Kota Jakarta Barat');
+    set(['kebayoran baru','kebayoranbaru','kebayoran lama','kebayoranlama','pesanggrahan','cilandak','pasar minggu','pasarminggu','jagakarsa','mampang prapatan','mampangprapatan','pancoran','tebet','setiabudi','setia budi'], 'Kota Jakarta Selatan');
+    set(['matraman','pulogadung','jatinegara','cakung','duren sawit','durensawit','kramat jati','kramatjati','makasar','pasar rebo','pasarrebo','ciracas'], 'Kota Jakarta Timur');
+    set(['kepulauan seribu utara','kepulauan seribu selatan'], 'Kabupaten Kepulauan Seribu');
+
+    return map;
+  })();
+
+  // Kata kunci nama kota/kabupaten yang mungkin disebut langsung di alamat.
+  // Urutan penting: yang lebih spesifik dicek lebih dulu.
+  const KOTA_KEYWORDS = [
+    ['tangerang selatan', 'Kota Tangerang Selatan'],
+    ['tangsel', 'Kota Tangerang Selatan'],
+    ['kabupaten tangerang', 'Kabupaten Tangerang'],
+    ['kab tangerang', 'Kabupaten Tangerang'],
+    ['kota tangerang', 'Kota Tangerang'],
+    ['kabupaten bekasi', 'Kabupaten Bekasi'],
+    ['kab bekasi', 'Kabupaten Bekasi'],
+    ['kota bekasi', 'Kota Bekasi'],
+    ['bekasi', 'Kota Bekasi'],
+    ['kabupaten bogor', 'Kabupaten Bogor'],
+    ['kab bogor', 'Kabupaten Bogor'],
+    ['kota bogor', 'Kota Bogor'],
+    ['bogor', 'Kabupaten Bogor'],
+    ['depok', 'Kota Depok'],
+    ['jakarta pusat', 'Kota Jakarta Pusat'],
+    ['jakarta utara', 'Kota Jakarta Utara'],
+    ['jakarta barat', 'Kota Jakarta Barat'],
+    ['jakarta selatan', 'Kota Jakarta Selatan'],
+    ['jakarta timur', 'Kota Jakarta Timur'],
+    ['kepulauan seribu', 'Kabupaten Kepulauan Seribu'],
+    ['tangerang', 'Kota Tangerang'],
+    ['jakarta', 'Kota Jakarta']
+  ];
+
+  function escapeRegex_(s){
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function detectKota_(alamatRaw, kecamatanRaw){
+    const kec = String(kecamatanRaw||'').toLowerCase().replace(/^kec\.?\s+/,'').replace(/^kecamatan\s+/,'').trim();
+
+    // 1. Cocokkan langsung dari kolom kecamatan (paling akurat).
+    if(kec && KECAMATAN_TO_KOTA[kec]) return KECAMATAN_TO_KOTA[kec];
+
+    // 2. Cari nama kecamatan yang disebut di dalam teks alamat ATAU kecamatan
+    //    (gabungan keduanya), diurutkan dari yang paling panjang/spesifik dulu.
+    const combinedText = (String(alamatRaw||'') + ' ' + String(kecamatanRaw||'')).toLowerCase();
+    if(combinedText.trim()){
+      const kecKeys = Object.keys(KECAMATAN_TO_KOTA).sort((a,b)=> b.length - a.length);
+      for(const k of kecKeys){
+        const re = new RegExp('\\b' + escapeRegex_(k) + '\\b');
+        if(re.test(combinedText)) return KECAMATAN_TO_KOTA[k];
+      }
+
+      // 3. Cari nama kota/kabupaten yang disebut langsung di alamat.
+      for(const [keyword, kota] of KOTA_KEYWORDS){
+        const re = new RegExp('\\b' + escapeRegex_(keyword) + '\\b');
+        if(re.test(combinedText)) return kota;
+      }
+    }
+
+    if(!String(alamatRaw||'').trim() && !kec) return '(Alamat & kecamatan belum diisi)';
+    return '(Kota/Kabupaten tidak dikenali — cek ejaan alamat/kecamatan)';
+  }
+
   function renderStats(){
     const data = ALL_CUSTOMERS;
     try{
@@ -507,20 +598,24 @@
 
       const groups = {};
       data.forEach(c=>{
-        const k = String(c.kecamatan||'').trim() || '(Kecamatan belum diisi)';
-        if(!groups[k]) groups[k] = [];
-        groups[k].push({ nama: String(c.nama||''), alamat: String(c.alamat||'').trim() });
+        const kota = detectKota_(c.alamat, c.kecamatan);
+        if(!groups[kota]) groups[kota] = [];
+        groups[kota].push({
+          nama: String(c.nama||''),
+          alamat: String(c.alamat||'').trim(),
+          kecamatan: String(c.kecamatan||'').trim()
+        });
       });
-      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length).slice(0,10);
+      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
       const kecEl = document.getElementById('statsKecamatan');
-      kecEl.innerHTML = entries.length ? entries.map(([kecamatan, list])=>`
+      kecEl.innerHTML = entries.length ? entries.map(([kota, list])=>`
         <details class="kec-group">
           <summary>
-            <span>${escapeHtml(kecamatan)}</span>
+            <span>${escapeHtml(kota)}</span>
             <span class="chip">${list.length} customer</span>
           </summary>
           <ul class="kec-address-list">
-            ${list.map(item=>`<li><span class="addr-name">${escapeHtml(item.nama)}</span> — <span class="addr-text">${escapeHtml(item.alamat || '(alamat belum diisi)')}</span></li>`).join('')}
+            ${list.map(item=>`<li><span class="addr-name">${escapeHtml(item.nama)}</span> — <span class="addr-text">${escapeHtml(item.alamat || '(alamat belum diisi)')}${item.kecamatan ? ' ('+escapeHtml(item.kecamatan)+')' : ''}</span></li>`).join('')}
           </ul>
         </details>
       `).join('') : '<div class="empty">Belum ada data. Pastikan sudah ada customer tersimpan di Google Sheet.</div>';
