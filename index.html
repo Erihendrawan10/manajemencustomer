@@ -270,7 +270,7 @@
           </div>
         </div>
       </div>
-      <p class="hint" style="margin-top:0;">Saat kolom pencarian terisi, hasil pencarian mengabaikan filter tanggal di atas dan mencari ke seluruh data.</p>
+      <p class="hint" style="margin-top:0;">Saat kolom pencarian terisi, hasil pencarian mengabaikan filter tanggal di atas dan mencari ke seluruh data. Saat filter tanggal aktif, angka Jumlah Order &amp; Total Value di atas dihitung dari order yang benar-benar terjadi pada rentang tanggal itu (bukan total kumulatif seumur hidup customer).</p>
 
       <div class="table-wrap">
         <table>
@@ -343,11 +343,12 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.7</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.8</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
   let ALL_CUSTOMERS = [];
+  let ALL_ORDERS = [];
   let CURRENT_ROWS = [];
 
   // ---------- Tabs ----------
@@ -634,6 +635,7 @@
       const data = await resp.json();
       if(!data.ok) throw new Error(data.error);
       ALL_CUSTOMERS = data.customers || [];
+      ALL_ORDERS = data.orders || [];
       renderTable();
     }catch(err){
       body.innerHTML = '<tr><td colspan="6" class="empty">Gagal memuat data. Cek URL Web App di Pengaturan koneksi.</td></tr>';
@@ -710,7 +712,7 @@
     const body = document.getElementById('customerTableBody');
     if(rows.length===0){
       body.innerHTML = `<tr><td colspan="6" class="empty">Tidak ada data yang cocok. (Total data termuat: ${ALL_CUSTOMERS.length})</td></tr>`;
-      renderSummary(rows);
+      if(q) renderSummary(rows); else renderSummaryFromOrders(from, to);
       CURRENT_ROWS = [];
       return;
     }
@@ -726,7 +728,10 @@
       </tr>
     `).join('');
 
-    renderSummary(rows);
+    // Mode pencarian: ringkasan berdasarkan total kumulatif customer yang ditemukan.
+    // Mode filter tanggal: ringkasan dihitung dari LOG setiap order pada rentang
+    // tanggal itu (bukan total kumulatif seumur hidup), sesuai rentang yang difilter.
+    if(q) renderSummary(rows); else renderSummaryFromOrders(from, to);
     CURRENT_ROWS = rows;
   }
 
@@ -741,6 +746,24 @@
     const totalOrders = rows.reduce((sum,c)=> sum + (Number(c.jumlahOrder)||0), 0);
     const totalValue = rows.reduce((sum,c)=> sum + (Number(c.totalValue)||0), 0);
     const repeatCustomers = rows.filter(c=> (Number(c.jumlahOrder)||0) > 1).length;
+    document.getElementById('sumCustomers').textContent = totalCustomers.toLocaleString('id-ID');
+    document.getElementById('sumOrders').textContent = totalOrders.toLocaleString('id-ID');
+    document.getElementById('sumValue').textContent = 'Rp ' + totalValue.toLocaleString('id-ID');
+    document.getElementById('sumRepeat').textContent = repeatCustomers.toLocaleString('id-ID');
+  }
+
+  function renderSummaryFromOrders(from, to){
+    const filteredOrders = ALL_ORDERS.filter(o=>{
+      if(from && o.tanggal && o.tanggal < from) return false;
+      if(to && o.tanggal && o.tanggal > to) return false;
+      return true;
+    });
+    const totalOrders = filteredOrders.length;
+    const totalValue = filteredOrders.reduce((sum,o)=> sum + (Number(o.value)||0), 0);
+    const waCount = {};
+    filteredOrders.forEach(o=>{ waCount[o.noWa] = (waCount[o.noWa]||0) + 1; });
+    const totalCustomers = Object.keys(waCount).length;
+    const repeatCustomers = Object.values(waCount).filter(c=> c>1).length;
     document.getElementById('sumCustomers').textContent = totalCustomers.toLocaleString('id-ID');
     document.getElementById('sumOrders').textContent = totalOrders.toLocaleString('id-ID');
     document.getElementById('sumValue').textContent = 'Rp ' + totalValue.toLocaleString('id-ID');
