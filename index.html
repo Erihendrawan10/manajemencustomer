@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.8</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.9</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -712,7 +712,7 @@
     const body = document.getElementById('customerTableBody');
     if(rows.length===0){
       body.innerHTML = `<tr><td colspan="6" class="empty">Tidak ada data yang cocok. (Total data termuat: ${ALL_CUSTOMERS.length})</td></tr>`;
-      if(q) renderSummary(rows); else renderSummaryFromOrders(from, to);
+      updateSummaryPanel(rows, from, to, q);
       CURRENT_ROWS = [];
       return;
     }
@@ -728,11 +728,21 @@
       </tr>
     `).join('');
 
-    // Mode pencarian: ringkasan berdasarkan total kumulatif customer yang ditemukan.
-    // Mode filter tanggal: ringkasan dihitung dari LOG setiap order pada rentang
-    // tanggal itu (bukan total kumulatif seumur hidup), sesuai rentang yang difilter.
-    if(q) renderSummary(rows); else renderSummaryFromOrders(from, to);
+    updateSummaryPanel(rows, from, to, q);
     CURRENT_ROWS = rows;
+  }
+
+  function updateSummaryPanel(rows, from, to, q){
+    // Mode pencarian, ATAU tidak ada filter tanggal sama sekali: pakai total
+    // kumulatif customer (data lengkap sejak awal, mencakup data lama sebelum
+    // fitur log order ada).
+    // Mode filter tanggal AKTIF (from/to diisi): hitung dari LOG setiap order
+    // pada rentang itu, supaya angkanya sesuai periode yang difilter.
+    if(q || (!from && !to)){
+      renderSummary(rows);
+    } else {
+      renderSummaryFromOrders(from, to);
+    }
   }
 
   function copyAllContacts(){
