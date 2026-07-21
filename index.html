@@ -318,7 +318,7 @@
 
     <div class="card">
       <h2>Sebaran Kota / Kabupaten</h2>
-      <p class="hint">Dikelompokkan per kota/kabupaten (dideteksi otomatis dari kolom alamat pengerjaan DAN kecamatan yang diinput, area Jabodetabek). Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
+      <p class="hint">10 kota/kabupaten dengan jumlah customer terbanyak (dideteksi otomatis dari kolom kecamatan — kalau kosong/tidak dikenali baru dari kolom alamat pengerjaan, area Jabodetabek). Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
       <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
     </div>
   </section>
@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.9</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.10</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -496,7 +496,7 @@
 
     set(['cisoka','solear','tigaraksa','jambe','cikupa','panongan','curug','kelapa dua','kelapadua','legok','pagedangan','cisauk','pasar kemis','pasarkemis','sindang jaya','sindangjaya','balaraja','jayanti','sukamulya','kresek','gunung kaler','gunungkaler','kronjo','mekar baru','mekarbaru','mauk','kemiri','sukadiri','rajeg','sepatan','sepatan timur','sepatantimur','pakuhaji','teluknaga','kosambi'], 'Kabupaten Tangerang');
 
-    set(['ciputat','ciputat timur','ciputattimur','pondok aren','pondokaren','serpong','serpong utara','serpongutara','pamulang','setu'], 'Kota Tangerang Selatan');
+    set(['ciputat','ciputat timur','ciputattimur','pondok aren','pondokaren','serpong','serpong utara','serpongutara','pamulang'], 'Kota Tangerang Selatan');
 
     set(['bantar gebang','bantargebang','bekasi barat','bekasi selatan','bekasi timur','bekasi utara','jatiasih','jatisampurna','medan satria','medansatria','mustika jaya','mustikajaya','pondok gede','pondokgede','pondok melati','pondokmelati','rawalumbu'], 'Kota Bekasi');
 
@@ -511,6 +511,30 @@
 
     return map;
   })();
+
+  // Nama kecamatan yang SAMA persis muncul di lebih dari satu kota/kabupaten
+  // (khusus Jabodetabek). Ditangani terpisah dari KECAMATAN_TO_KOTA supaya
+  // tidak diam-diam salah kelompok.
+  const AMBIGUOUS_KECAMATAN = {
+    'setu': [
+      { kota: 'Kabupaten Bekasi', keywords: ['bekasi','cikarang','tambun','cibitung'] },
+      { kota: 'Kota Tangerang Selatan', keywords: ['tangerang selatan','tangsel','serpong','ciputat','pamulang','pondok aren','pondokaren'] }
+    ]
+  };
+
+  function resolveKecamatan_(kecKey, contextText){
+    const ambiguous = AMBIGUOUS_KECAMATAN[kecKey];
+    if(ambiguous){
+      for(const opt of ambiguous){
+        for(const kw of opt.keywords){
+          if(contextText.includes(kw)) return opt.kota;
+        }
+      }
+      // Tidak ada petunjuk tambahan di alamat untuk membedakan -> tandai perlu dicek manual.
+      return ambiguous.map(o=>o.kota).join(' / ') + ' (nama kecamatan sama di 2 wilayah, cek manual)';
+    }
+    return KECAMATAN_TO_KOTA[kecKey] || null;
+  }
 
   // Kata kunci nama kota/kabupaten yang mungkin disebut langsung di alamat.
   // Urutan penting: yang lebih spesifik dicek lebih dulu.
@@ -545,28 +569,38 @@
 
   function detectKota_(alamatRaw, kecamatanRaw){
     const kec = String(kecamatanRaw||'').toLowerCase().replace(/^kec\.?\s+/,'').replace(/^kecamatan\s+/,'').trim();
+    const alamatText = String(alamatRaw||'').toLowerCase();
+    const kecText = String(kecamatanRaw||'').toLowerCase();
+    const contextText = alamatText + ' ' + kecText;
 
-    // 1. Cocokkan langsung dari kolom kecamatan (paling akurat).
-    if(kec && KECAMATAN_TO_KOTA[kec]) return KECAMATAN_TO_KOTA[kec];
+    // 1. Cek KOLOM KECAMATAN dulu (persis, paling akurat). Kalau nama
+    //    kecamatannya ada di lebih dari satu kota/kabupaten, cari petunjuk
+    //    tambahan di alamat/kecamatan untuk membedakan.
+    if(kec){
+      const result = resolveKecamatan_(kec, contextText);
+      if(result) return result;
+    }
 
-    // 2. Cari nama kecamatan yang disebut di dalam teks alamat ATAU kecamatan
-    //    (gabungan keduanya), diurutkan dari yang paling panjang/spesifik dulu.
-    const combinedText = (String(alamatRaw||'') + ' ' + String(kecamatanRaw||'')).toLowerCase();
-    if(combinedText.trim()){
-      const kecKeys = Object.keys(KECAMATAN_TO_KOTA).sort((a,b)=> b.length - a.length);
+    // 2. Kalau kolom kecamatan kosong ATAU tidak dikenali, baru cek KOLOM ALAMAT:
+    //    cari nama kecamatan mana pun yang disebut di teksnya.
+    if(alamatText.trim()){
+      const kecKeys = Object.keys(KECAMATAN_TO_KOTA).concat(Object.keys(AMBIGUOUS_KECAMATAN)).sort((a,b)=> b.length - a.length);
       for(const k of kecKeys){
         const re = new RegExp('\\b' + escapeRegex_(k) + '\\b');
-        if(re.test(combinedText)) return KECAMATAN_TO_KOTA[k];
+        if(re.test(alamatText)){
+          const result = resolveKecamatan_(k, contextText);
+          if(result) return result;
+        }
       }
 
-      // 3. Cari nama kota/kabupaten yang disebut langsung di alamat.
+      // 3. Kalau masih belum ketemu, cari nama kota/kabupaten yang disebut langsung di alamat.
       for(const [keyword, kota] of KOTA_KEYWORDS){
         const re = new RegExp('\\b' + escapeRegex_(keyword) + '\\b');
-        if(re.test(combinedText)) return kota;
+        if(re.test(alamatText)) return kota;
       }
     }
 
-    if(!String(alamatRaw||'').trim() && !kec) return '(Alamat & kecamatan belum diisi)';
+    if(!alamatText.trim() && !kec) return '(Alamat & kecamatan belum diisi)';
     return '(Kota/Kabupaten tidak dikenali — cek ejaan alamat/kecamatan)';
   }
 
@@ -607,7 +641,7 @@
           kecamatan: String(c.kecamatan||'').trim()
         });
       });
-      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
+      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length).slice(0,10);
       const kecEl = document.getElementById('statsKecamatan');
       kecEl.innerHTML = entries.length ? entries.map(([kota, list])=>`
         <details class="kec-group">
