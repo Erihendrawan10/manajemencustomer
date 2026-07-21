@@ -318,7 +318,7 @@
 
     <div class="card">
       <h2>Sebaran Kota / Kabupaten</h2>
-      <p class="hint">10 kota/kabupaten dengan jumlah customer terbanyak (dideteksi otomatis dari kolom kecamatan — kalau kosong/tidak dikenali baru dari kolom alamat pengerjaan, area Jabodetabek). Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
+      <p class="hint">Seluruh kota/kabupaten yang terdeteksi (dari kolom kecamatan — kalau kosong/tidak dikenali baru dari kolom alamat pengerjaan, area Jabodetabek), diurutkan dari jumlah customer terbanyak. Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
       <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
     </div>
   </section>
@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.11</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.13</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -547,11 +547,9 @@
     ['kabupaten bekasi', 'Kabupaten Bekasi'],
     ['kab bekasi', 'Kabupaten Bekasi'],
     ['kota bekasi', 'Kota Bekasi'],
-    ['bekasi', 'Kota Bekasi'],
     ['kabupaten bogor', 'Kabupaten Bogor'],
     ['kab bogor', 'Kabupaten Bogor'],
     ['kota bogor', 'Kota Bogor'],
-    ['bogor', 'Kabupaten Bogor'],
     ['depok', 'Kota Depok'],
     ['jakarta pusat', 'Kota Jakarta Pusat'],
     ['jakarta utara', 'Kota Jakarta Utara'],
@@ -559,8 +557,12 @@
     ['jakarta selatan', 'Kota Jakarta Selatan'],
     ['jakarta timur', 'Kota Jakarta Timur'],
     ['kepulauan seribu', 'Kabupaten Kepulauan Seribu'],
-    ['tangerang', 'Kota Tangerang'],
-    ['jakarta', 'Kota Jakarta']
+    // Nama tanpa "kota"/"kabupaten" di depannya itu ambigu (bisa dua-duanya),
+    // jadi ditandai perlu dicek manual, bukan asal ditebak salah satu.
+    ['bekasi', 'Kota Bekasi / Kabupaten Bekasi (sebutkan "kota" atau "kabupaten", cek manual)'],
+    ['bogor', 'Kota Bogor / Kabupaten Bogor (sebutkan "kota" atau "kabupaten", cek manual)'],
+    ['tangerang', 'Kota Tangerang / Kabupaten Tangerang (sebutkan "kota" atau "kabupaten", cek manual)'],
+    ['jakarta', 'Kota Jakarta (sebutkan wilayah: Pusat/Utara/Barat/Selatan/Timur)']
   ];
 
   function escapeRegex_(s){
@@ -643,7 +645,7 @@
           kecamatan: String(c.kecamatan||'').trim()
         });
       });
-      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length).slice(0,10);
+      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
       const kecEl = document.getElementById('statsKecamatan');
       kecEl.innerHTML = entries.length ? entries.map(([kota, list])=>`
         <details class="kec-group">
