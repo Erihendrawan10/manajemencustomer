@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.10</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer — build 2026-07-17.11</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -581,22 +581,24 @@
       if(result) return result;
     }
 
-    // 2. Kalau kolom kecamatan kosong ATAU tidak dikenali, baru cek KOLOM ALAMAT:
-    //    cari nama kecamatan mana pun yang disebut di teksnya.
-    if(alamatText.trim()){
+    // 2. Kalau kolom kecamatan kosong ATAU tidak dikenali, cek gabungan teks
+    //    ALAMAT + KECAMATAN: cari nama kecamatan mana pun yang disebut di situ
+    //    (misalnya kalau nama kota malah keketik di kolom kecamatan).
+    if(contextText.trim()){
       const kecKeys = Object.keys(KECAMATAN_TO_KOTA).concat(Object.keys(AMBIGUOUS_KECAMATAN)).sort((a,b)=> b.length - a.length);
       for(const k of kecKeys){
         const re = new RegExp('\\b' + escapeRegex_(k) + '\\b');
-        if(re.test(alamatText)){
+        if(re.test(contextText)){
           const result = resolveKecamatan_(k, contextText);
           if(result) return result;
         }
       }
 
-      // 3. Kalau masih belum ketemu, cari nama kota/kabupaten yang disebut langsung di alamat.
+      // 3. Kalau masih belum ketemu, cari nama kota/kabupaten yang disebut
+      //    langsung di alamat ATAU kecamatan.
       for(const [keyword, kota] of KOTA_KEYWORDS){
         const re = new RegExp('\\b' + escapeRegex_(keyword) + '\\b');
-        if(re.test(alamatText)) return kota;
+        if(re.test(contextText)) return kota;
       }
     }
 
