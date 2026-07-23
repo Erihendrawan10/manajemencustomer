@@ -318,7 +318,7 @@
 
     <div class="card">
       <h2>Sebaran Kota / Kabupaten</h2>
-      <p class="hint">Seluruh kota/kabupaten yang terdeteksi (dari kolom kecamatan — kalau kosong/tidak dikenali baru dari kolom alamat pengerjaan, area Jabodetabek), diurutkan dari jumlah customer terbanyak. Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
+      <p class="hint">Kota/kabupaten dideteksi otomatis lewat Google Maps (akurat untuk seluruh kelurahan/kecamatan di Indonesia, bukan cuma daftar kata kunci). Data lama yang belum sempat di-cek Google Maps akan ditandai "(belum di-geocode, perkiraan)" — lihat README untuk cara mengisinya sekali jalan. Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
       <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
     </div>
   </section>
@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.14</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.15</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -494,7 +494,7 @@
 
     set(['tangerang','karawaci','cibodas','periuk','batuceper','benda','cipondoh','pinang','jatiuwung','neglasari','larangan','ciledug','karang tengah','karangtengah'], 'Kota Tangerang');
 
-    set(['cisoka','solear','tigaraksa','jambe','cikupa','panongan','curug','kelapa dua','kelapadua','legok','pagedangan','cisauk','pasar kemis','pasarkemis','sindang jaya','sindangjaya','balaraja','jayanti','sukamulya','kresek','gunung kaler','gunungkaler','kronjo','mekar baru','mekarbaru','mauk','kemiri','sukadiri','rajeg','sepatan','sepatan timur','sepatantimur','pakuhaji','teluknaga','kosambi'], 'Kabupaten Tangerang');
+    set(['cisoka','solear','tigaraksa','jambe','cikupa','panongan','curug','legok','pagedangan','cisauk','pasar kemis','pasarkemis','sindang jaya','sindangjaya','balaraja','jayanti','sukamulya','kresek','gunung kaler','gunungkaler','kronjo','mekar baru','mekarbaru','mauk','kemiri','sukadiri','rajeg','sepatan','sepatan timur','sepatantimur','pakuhaji','teluknaga'], 'Kabupaten Tangerang');
 
     set(['ciputat','ciputat timur','ciputattimur','pondok aren','pondokaren','serpong','serpong utara','serpongutara','pamulang'], 'Kota Tangerang Selatan');
 
@@ -519,6 +519,14 @@
     'setu': [
       { kota: 'Kabupaten Bekasi', keywords: ['bekasi','cikarang','tambun','cibitung'] },
       { kota: 'Kota Tangerang Selatan', keywords: ['tangerang selatan','tangsel','serpong','ciputat','pamulang','pondok aren','pondokaren'] }
+    ],
+    'kelapa dua': [
+      { kota: 'Kabupaten Tangerang', keywords: ['tangerang','curug','gading serpong','summarecon'] },
+      { kota: 'Kota Depok', keywords: ['depok','cimanggis','tapos','margonda'] }
+    ],
+    'kosambi': [
+      { kota: 'Kabupaten Tangerang', keywords: ['kab tangerang','bandara','soekarno','cengkareng drain'] },
+      { kota: 'Kota Jakarta Barat', keywords: ['jakarta barat','jakbar','duri kosambi','cengkareng'] }
     ]
   };
 
@@ -533,7 +541,7 @@
       // Tidak ada petunjuk tambahan di alamat untuk membedakan -> tandai perlu dicek manual.
       return ambiguous.map(o=>o.kota).join(' / ') + ' (nama kecamatan sama di 2 wilayah, cek manual)';
     }
-    return KECAMATAN_TO_KOTA[kecKey] || null;
+    return KECAMATAN_TO_KOTA[kecKey] || KELURAHAN_TO_KOTA[kecKey] || null;
   }
 
   // Nama kelurahan / area terkenal yang sering diketik orang alih-alih nama
@@ -545,13 +553,20 @@
     set(['bintaro','discovery terra'], 'Kota Tangerang Selatan');
     set(['kayu putih','rawamangun'], 'Kota Jakarta Timur');
     set(['gandaria selatan','gandaria','kalibata'], 'Kota Jakarta Selatan');
-    set(['duri kepa','duri kosambi'], 'Kota Jakarta Barat');
+    set(['duri kepa'], 'Kota Jakarta Barat');
     set(['lenteng agung'], 'Kota Jakarta Selatan');
+    // Bogor
+    set(['ciluar','sindang barang','sindangbarang','kedung badak','kedungbadak','tanah sereal','tanahsereal','cibadak'], 'Kota Bogor');
+    set(['cilebut','ciangsana','cikeas','bojong kulur','bojongkulur','gng putri','gng. putri','gngputri','gn putri','kpanunggal'], 'Kabupaten Bogor');
+    // Bekasi
+    set(['jati bening','jatibening','jaka sampurna','jakasampurna','jati kramat','jatikramat','kalimalang','metropolitan mall','galaxy','bintara jaya','bintarajaya'], 'Kota Bekasi');
+    set(['sumber jaya','sumberjaya','pondok ungu','pondokungu'], 'Kabupaten Bekasi');
     return map;
   })();
 
   // Kata kunci nama kota/kabupaten (termasuk singkatan umum) yang mungkin
-  // disebut langsung di alamat. Urutan penting: yang lebih spesifik dulu.
+  // disebut langsung di alamat. Urutan panjang teks yang menentukan prioritas
+  // (lihat buildUnifiedIndex_), bukan urutan array ini.
   const KOTA_KEYWORDS = [
     ['tangerang selatan', 'Kota Tangerang Selatan'],
     ['tangsel', 'Kota Tangerang Selatan'],
@@ -595,27 +610,47 @@
     return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   }
 
-  function buildCollapsedMap_(sourceMap){
-    const out = {};
-    Object.keys(sourceMap).forEach(k=>{
-      const c = collapse_(k);
-      if(c && c.length >= 4 && !out[c]) out[c] = sourceMap[k];
+  // Gabungan SEMUA sumber (kecamatan, kecamatan ambigu, kelurahan/area, kota)
+  // diurutkan dari yang PALING PANJANG teksnya dulu. Ini penting supaya frasa
+  // spesifik seperti "tangerang selatan" dicek SEBELUM kata pendek "tangerang"
+  // (yang kebetulan juga nama kecamatan resmi di Kota Tangerang) — jadi tidak
+  // salah berhenti di kecocokan yang kurang spesifik.
+  const UNIFIED_INDEX = (() => {
+    const entries = [];
+    Object.keys(KECAMATAN_TO_KOTA).forEach(k => entries.push({ key: k, resolve: () => KECAMATAN_TO_KOTA[k] }));
+    Object.keys(AMBIGUOUS_KECAMATAN).forEach(k => entries.push({ key: k, resolve: (ctx) => resolveKecamatan_(k, ctx) }));
+    Object.keys(KELURAHAN_TO_KOTA).forEach(k => entries.push({ key: k, resolve: () => KELURAHAN_TO_KOTA[k] }));
+    KOTA_KEYWORDS.forEach(([k, v]) => entries.push({ key: k, resolve: () => v }));
+    entries.sort((a, b) => b.key.length - a.key.length);
+    return entries;
+  })();
+
+  const UNIFIED_INDEX_COLLAPSED = (() => {
+    const seen = {};
+    const out = [];
+    UNIFIED_INDEX.forEach(e => {
+      const c = collapse_(e.key);
+      if(c && c.length >= 4 && !seen[c]){
+        seen[c] = true;
+        out.push({ key: c, resolve: e.resolve });
+      }
     });
+    out.sort((a, b) => b.key.length - a.key.length);
     return out;
+  })();
+
+  function scanUnified_(contextText){
+    for(const entry of UNIFIED_INDEX){
+      const re = new RegExp('\\b' + escapeRegex_(entry.key) + '\\b');
+      if(re.test(contextText)) return entry.resolve(contextText);
+    }
+    return null;
   }
 
-  const KECAMATAN_TO_KOTA_COLLAPSED = buildCollapsedMap_(KECAMATAN_TO_KOTA);
-  const KELURAHAN_TO_KOTA_COLLAPSED = buildCollapsedMap_(KELURAHAN_TO_KOTA);
-
-  function resolveFromCollapsedText_(collapsedText){
+  function scanUnifiedCollapsed_(collapsedText){
     if(!collapsedText) return null;
-    const allKeys = Object.keys(KECAMATAN_TO_KOTA_COLLAPSED)
-      .concat(Object.keys(KELURAHAN_TO_KOTA_COLLAPSED))
-      .sort((a,b)=> b.length - a.length);
-    for(const k of allKeys){
-      if(collapsedText.includes(k)){
-        return KECAMATAN_TO_KOTA_COLLAPSED[k] || KELURAHAN_TO_KOTA_COLLAPSED[k];
-      }
+    for(const entry of UNIFIED_INDEX_COLLAPSED){
+      if(collapsedText.includes(entry.key)) return entry.resolve(collapsedText);
     }
     return null;
   }
@@ -637,38 +672,21 @@
     const alamatText = cleanLocationText_(alamatRaw);
     const contextText = (alamatText + ' ' + kecClean).trim();
 
-    // 1. Cek KOLOM KECAMATAN dulu (persis, paling akurat). Kalau nama
+    // 1. Cek KOLOM KECAMATAN dulu SECARA PERSIS (paling akurat). Kalau nama
     //    kecamatannya ada di lebih dari satu kota/kabupaten, cari petunjuk
     //    tambahan di alamat/kecamatan untuk membedakan.
     if(kecClean){
       const exact = resolveKecamatan_(kecClean, contextText);
       if(exact) return exact;
-      const collapsed = resolveFromCollapsedText_(collapse_(kecClean));
-      if(collapsed) return collapsed;
     }
 
-    // 2. Kalau kolom kecamatan kosong ATAU tidak dikenali, cek gabungan teks
-    //    ALAMAT + KECAMATAN: cari nama kecamatan/kelurahan/area mana pun yang
-    //    disebut di situ (termasuk yang beda spasi atau nama kelurahan terkenal).
+    // 2. Kalau kolom kecamatan kosong ATAU tidak dikenali secara persis, cek
+    //    gabungan teks ALAMAT + KECAMATAN: cari frasa PALING SPESIFIK/PANJANG
+    //    yang disebut di situ (kecamatan, kelurahan/area terkenal, atau nama
+    //    kota/kabupaten), baik dalam bentuk normal maupun tanpa spasi.
     if(contextText){
-      const kecKeys = Object.keys(KECAMATAN_TO_KOTA).concat(Object.keys(AMBIGUOUS_KECAMATAN)).sort((a,b)=> b.length - a.length);
-      for(const k of kecKeys){
-        const re = new RegExp('\\b' + escapeRegex_(k) + '\\b');
-        if(re.test(contextText)){
-          const result = resolveKecamatan_(k, contextText);
-          if(result) return result;
-        }
-      }
-
-      const collapsedResult = resolveFromCollapsedText_(collapse_(contextText));
-      if(collapsedResult) return collapsedResult;
-
-      // 3. Kalau masih belum ketemu, cari nama kota/kabupaten / singkatan
-      //    wilayah yang disebut langsung di alamat ATAU kecamatan.
-      for(const [keyword, kota] of KOTA_KEYWORDS){
-        const re = new RegExp('\\b' + escapeRegex_(keyword) + '\\b');
-        if(re.test(contextText)) return kota;
-      }
+      const result = scanUnified_(contextText) || scanUnifiedCollapsed_(collapse_(contextText));
+      if(result) return result;
     }
 
     if(!alamatText && !kecClean) return '(Alamat & kecamatan belum diisi)';
@@ -704,7 +722,9 @@
 
       const groups = {};
       data.forEach(c=>{
-        const kota = detectKota_(c.alamat, c.kecamatan);
+        const kota = (c.kotaKabupaten && c.kotaKabupaten.trim())
+          ? c.kotaKabupaten.trim()
+          : detectKota_(c.alamat, c.kecamatan) + ' (belum di-geocode, perkiraan)';
         if(!groups[kota]) groups[kota] = [];
         groups[kota].push({
           nama: String(c.nama||''),
