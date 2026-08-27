@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.17</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.18</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -905,10 +905,33 @@
     }
   }
 
+  // Turunkan nama provinsi dari hasil deteksi kota/kabupaten (khusus Jabodetabek).
+  function getProvinsi_(kota){
+    if(!kota) return '';
+    if(kota.indexOf('Jakarta') !== -1 || kota.indexOf('Kepulauan Seribu') !== -1) return 'DKI Jakarta';
+    if(kota.indexOf('Depok') !== -1 || kota.indexOf('Bogor') !== -1 || kota.indexOf('Bekasi') !== -1) return 'Jawa Barat';
+    if(kota.indexOf('Tangerang') !== -1) return 'Banten';
+    return '';
+  }
+
+  // Buang keterangan tambahan dalam kurung (misal "(sebutkan kota/kabupaten,
+  // cek manual)") supaya hasil salinan ke spreadsheet lebih rapi per sel.
+  function cleanKotaForCopy_(kota){
+    const idx = kota.indexOf(' (');
+    return idx !== -1 ? kota.slice(0, idx) : kota;
+  }
+
   function copyAllContacts(){
     if(CURRENT_ROWS.length===0){ showToast('Tidak ada data untuk disalin'); return; }
-    const text = CURRENT_ROWS.map(c => `${c.nama} - +${c.noWa}`).join('\n');
-    navigator.clipboard.writeText(text).then(()=>showToast(`Disalin ${CURRENT_ROWS.length} kontak`));
+    const header = ['Nama','WhatsApp','Alamat','Kecamatan','Kota/Kab','Provinsi'].join('\t');
+    const rows = CURRENT_ROWS.map(c=>{
+      const kotaRaw = detectKota_(c.alamat, c.kecamatan);
+      const kota = cleanKotaForCopy_(kotaRaw);
+      const provinsi = getProvinsi_(kota);
+      return [c.nama, '+'+c.noWa, c.alamat||'', c.kecamatan||'', kota, provinsi].join('\t');
+    });
+    const text = [header, ...rows].join('\n');
+    navigator.clipboard.writeText(text).then(()=>showToast(`Disalin ${CURRENT_ROWS.length} kontak (siap tempel ke spreadsheet)`));
   }
 
   function renderSummary(rows){
