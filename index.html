@@ -343,7 +343,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.16</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.17</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -907,7 +907,7 @@
 
   function copyAllContacts(){
     if(CURRENT_ROWS.length===0){ showToast('Tidak ada data untuk disalin'); return; }
-    const text = CURRENT_ROWS.map(c => `${c.nama} - ${c.noWa}`).join('\n');
+    const text = CURRENT_ROWS.map(c => `${c.nama} - +${c.noWa}`).join('\n');
     navigator.clipboard.writeText(text).then(()=>showToast(`Disalin ${CURRENT_ROWS.length} kontak`));
   }
 
