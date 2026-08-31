@@ -111,6 +111,16 @@
   .header-copy{
     text-transform:none;letter-spacing:0;font-weight:600;background:#fff;
   }
+  .name-link{
+    background:none;border:none;padding:0;font:inherit;color:var(--teal-dark);
+    font-weight:600;cursor:pointer;text-align:left;
+  }
+  .name-link:hover{text-decoration:underline;}
+  .history-del{
+    background:none;border:1px solid var(--line);border-radius:6px;padding:3px 8px;
+    font-size:12px;cursor:pointer;color:var(--danger);
+  }
+  .history-del:hover{background:#fbecea;}
   .table-wrap{max-height:65vh;overflow:auto;border:1px solid var(--line);border-radius:var(--radius);}
   .empty{padding:40px;text-align:center;color:var(--muted);font-size:14px;}
   .modal-overlay{
@@ -341,9 +351,35 @@
   </div>
 </div>
 
+<!-- CUSTOMER DETAIL MODAL -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="width:min(560px,92vw);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div>
+        <h3 id="detailNama" style="margin-bottom:2px;"></h3>
+        <p class="sub" id="detailWa" style="margin:0;"></p>
+      </div>
+      <button class="ghost" style="color:var(--danger);border-color:var(--danger);flex-shrink:0;" onclick="deleteCustomerFromModal()">Hapus Customer</button>
+    </div>
+    <p class="sub" id="detailAlamat" style="margin:12px 0 16px 0;"></p>
+
+    <h3 style="font-size:14px;margin-bottom:8px;">Riwayat Order</h3>
+    <div class="table-wrap" style="max-height:320px;">
+      <table>
+        <thead><tr><th>Tanggal</th><th>Value</th><th></th></tr></thead>
+        <tbody id="detailHistoryBody"></tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeDetail()">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.19</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.20</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -372,6 +408,77 @@
     closeSettings();
     showToast('Koneksi disimpan');
     if(document.getElementById('tab-list').classList.contains('active')) loadCustomers();
+  }
+
+  // ---------- Detail customer & riwayat order ----------
+  let DETAIL_WA = null;
+
+  function openDetail(noWa){
+    DETAIL_WA = noWa;
+    const c = ALL_CUSTOMERS.find(x => x.noWa === noWa);
+    if(!c){ showToast('Data customer tidak ditemukan'); return; }
+
+    document.getElementById('detailNama').textContent = c.nama;
+    document.getElementById('detailWa').textContent = '+' + c.noWa;
+    document.getElementById('detailAlamat').textContent = combineAlamatKecamatan(c.alamat, c.kecamatan);
+
+    renderHistory(noWa);
+    document.getElementById('detailModal').classList.add('open');
+  }
+
+  function closeDetail(){
+    document.getElementById('detailModal').classList.remove('open');
+    DETAIL_WA = null;
+  }
+
+  function renderHistory(noWa){
+    const history = ALL_ORDERS
+      .filter(o => o.noWa === noWa)
+      .sort((a,b) => (b.tanggal||'').localeCompare(a.tanggal||'') || (Number(b.ts)||0) - (Number(a.ts)||0));
+
+    const body = document.getElementById('detailHistoryBody');
+    body.innerHTML = history.length ? history.map(o => `
+      <tr>
+        <td>${escapeHtml(o.tanggal||'-')}</td>
+        <td class="value-cell">Rp ${Number(o.value||0).toLocaleString('id-ID')}</td>
+        <td><button class="history-del" onclick="deleteHistoryEntry('${escapeAttr(noWa)}','${escapeAttr(String(o.ts))}')">Hapus</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="3" class="empty">Belum ada riwayat order.</td></tr>';
+  }
+
+  async function deleteHistoryEntry(noWa, ts){
+    if(!requireApi()) return;
+    if(!confirm('Hapus riwayat order ini? Jumlah order & total value customer ini akan disesuaikan.')) return;
+    try{
+      const res = await postAction({ action:'deleteOrder', noWa, ts });
+      if(res.ok){
+        showToast('Riwayat order dihapus');
+        await loadCustomers();
+        if(DETAIL_WA) openDetail(DETAIL_WA);
+      } else {
+        showToast('Gagal: ' + (res.error||'tidak diketahui'));
+      }
+    }catch(err){
+      showToast('Gagal terhubung ke server');
+    }
+  }
+
+  async function deleteCustomerFromModal(){
+    if(!DETAIL_WA) return;
+    if(!requireApi()) return;
+    if(!confirm('Hapus customer ini sepenuhnya beserta datanya di Daftar Customer? Riwayat order di log tidak ikut terhapus otomatis.')) return;
+    try{
+      const res = await postAction({ action:'deleteCustomer', noWa: DETAIL_WA });
+      if(res.ok){
+        showToast('Customer dihapus');
+        closeDetail();
+        await loadCustomers();
+      } else {
+        showToast('Gagal: ' + (res.error||'tidak diketahui'));
+      }
+    }catch(err){
+      showToast('Gagal terhubung ke server');
+    }
   }
 
   function requireApi(){
@@ -475,6 +582,15 @@
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ records })
+    });
+    return await resp.json();
+  }
+
+  async function postAction(payload){
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
     });
     return await resp.json();
   }
@@ -879,7 +995,7 @@
 
     body.innerHTML = rows.map(c=>`
       <tr>
-        <td>${escapeHtml(c.nama)}</td>
+        <td><button class="name-link" onclick="openDetail('${escapeAttr(c.noWa)}')">${escapeHtml(c.nama)}</button></td>
         <td>${escapeHtml(c.noWa)}</td>
         <td>${escapeHtml(combineAlamatKecamatan(c.alamat, c.kecamatan))}</td>
         <td>${escapeHtml(c.tanggalPengerjaan||'-')}</td>
