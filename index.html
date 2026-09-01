@@ -232,6 +232,15 @@
         <span id="bulkMsg"></span>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Import dari Spreadsheet Lain</h2>
+      <p class="hint">Menarik data order dari spreadsheet terpisah (tab per tanggal), hanya baris yang kolom Value-nya sudah terisi. Percobaan pertama kali mungkin perlu dijalankan manual dulu dari Apps Script untuk izin akses — lihat README.</p>
+      <div class="actions-row">
+        <button class="ghost" id="importBtn" onclick="importExternal()">Import Sekarang</button>
+        <span id="importMsg"></span>
+      </div>
+    </div>
   </section>
 
   <!-- TAB: LIST -->
@@ -379,7 +388,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.20</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.21</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -574,6 +583,25 @@
         }
       }
     });
+  }
+
+  // ---------- Import dari spreadsheet lain ----------
+  async function importExternal(){
+    if(!requireApi()) return;
+    const btn = document.getElementById('importBtn');
+    btn.disabled = true;
+    setMsg('importMsg', 'Mengimport, mohon tunggu (bisa beberapa menit kalau datanya banyak)...', true);
+    try{
+      const res = await postAction({ action: 'importExternal' });
+      if(res.ok){
+        setMsg('importMsg', `Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}.`, true);
+      } else {
+        setMsg('importMsg', 'Gagal: '+(res.error||'tidak diketahui')+'. Kalau ini percobaan pertama, coba jalankan fungsi importFromExternalSheet manual dulu dari Apps Script untuk memberi izin akses (lihat README).', false);
+      }
+    }catch(err){
+      setMsg('importMsg', 'Gagal terhubung ke server. Cek URL Web App.', false);
+    }
+    btn.disabled = false;
   }
 
   // Kirim sebagai text/plain supaya tidak kena CORS preflight di Apps Script.
