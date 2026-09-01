@@ -235,7 +235,7 @@
 
     <div class="card">
       <h2>Import dari Spreadsheet Lain</h2>
-      <p class="hint">Menarik data order dari spreadsheet terpisah (tab per tanggal), hanya baris yang kolom Value-nya sudah terisi. Percobaan pertama kali mungkin perlu dijalankan manual dulu dari Apps Script untuk izin akses — lihat README.</p>
+      <p class="hint">Menarik data order dari spreadsheet terpisah (tab per tanggal). Judul kolom harus di baris 1 (kolom dicari berdasarkan nama judulnya, bukan urutan — kolom tanpa judul otomatis diabaikan). Baris dilewati kalau: kolom Value kosong, atau ada kolom "Status" berisi "Done". Percobaan pertama kali mungkin perlu dijalankan manual dulu dari Apps Script untuk izin akses — lihat README.</p>
       <div class="actions-row">
         <button class="ghost" id="importBtn" onclick="importExternal()">Import Sekarang</button>
         <span id="importMsg"></span>
@@ -388,7 +388,7 @@
 
 <div class="toast" id="toast"></div>
 
-<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.21</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:16px;">Manajemen Customer.23</div>
 
 <script>
   let API_URL = localStorage.getItem('crm_api_url') || '';
@@ -457,7 +457,7 @@
 
   async function deleteHistoryEntry(noWa, ts){
     if(!requireApi()) return;
-    if(!confirm('Hapus riwayat order ini? Jumlah order & total value customer ini akan disesuaikan.')) return;
+    if(!confirm('Hapus riwayat order ini? Nama, tanggal pengerjaan, jumlah order & total value customer ini akan otomatis diperbarui mengikuti sisa riwayat yang tersisa.')) return;
     try{
       const res = await postAction({ action:'deleteOrder', noWa, ts });
       if(res.ok){
@@ -594,7 +594,7 @@
     try{
       const res = await postAction({ action: 'importExternal' });
       if(res.ok){
-        setMsg('importMsg', `Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}.`, true);
+        setMsg('importMsg', `Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (Status: Done): ${res.doneSkipped||0}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}.`, true);
       } else {
         setMsg('importMsg', 'Gagal: '+(res.error||'tidak diketahui')+'. Kalau ini percobaan pertama, coba jalankan fungsi importFromExternalSheet manual dulu dari Apps Script untuk memberi izin akses (lihat README).', false);
       }
