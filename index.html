@@ -6,7 +6,6 @@
 <title>Manajemen Customer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
   :root{
     --ink:#1c2b25;
@@ -83,7 +82,7 @@
     font-weight:600;font-size:13px;cursor:pointer;color:var(--ink);font-family:'Inter',sans-serif;
   }
   button.ghost:hover{border-color:var(--teal);color:var(--teal-dark);}
-  #formMsg,#bulkMsg{font-size:13px;margin-top:8px;}
+  #formMsg{font-size:13px;margin-top:8px;}
   .ok{color:var(--teal-dark);}
   .err{color:var(--danger);}
   .filter-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;}
@@ -224,16 +223,6 @@
     </div>
 
     <div class="card">
-      <h2>Upload Massal</h2>
-      <p class="hint">Upload file CSV dengan kolom: <code>nama, noWa, alamat, kecamatan, tanggal, value</code>. Baris dengan nomor WA yang sudah ada akan ditimpa sebagai repeat order.</p>
-      <input type="file" id="bulkFile" accept=".csv">
-      <div class="actions-row">
-        <button class="ghost" id="bulkBtn" onclick="uploadBulk()">Upload File</button>
-        <span id="bulkMsg"></span>
-      </div>
-    </div>
-
-    <div class="card">
       <h2>Import dari Spreadsheet Lain</h2>
       <p class="hint">Menarik data order dari spreadsheet terpisah (tab per tanggal). Judul kolom harus di baris 1 (kolom dicari berdasarkan nama judulnya, bukan urutan — kolom tanpa judul otomatis diabaikan). Baris dilewati kalau: kolom Value kosong, atau ada kolom "Status" berisi "Done". Percobaan pertama kali mungkin perlu dijalankan manual dulu dari Apps Script untuk izin akses — lihat README.</p>
       <div class="actions-row">
@@ -276,7 +265,7 @@
         </div>
         <button class="primary" onclick="renderTable()">Terapkan Filter Tanggal</button>
         <button class="ghost" onclick="resetDateFilter()">Reset Tanggal</button>
-        <button class="ghost" onclick="loadCustomers()">Muat Ulang</button>
+        <button class="ghost" onclick="refreshCustomers()">Muat Ulang</button>
       </div>
 
       <div class="filter-row" style="margin-top:2px;">
@@ -336,8 +325,8 @@
     </div>
 
     <div class="card">
-      <h2>Sebaran Kota / Kabupaten</h2>
-      <p class="hint">Kota/kabupaten dideteksi otomatis lewat Google Maps (akurat untuk seluruh kelurahan/kecamatan di Indonesia, bukan cuma daftar kata kunci). Data lama yang belum sempat di-cek Google Maps akan ditandai "(belum di-geocode, perkiraan)" — lihat README untuk cara mengisinya sekali jalan. Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
+      <h2>Sebaran Kota / Kabupaten (10 Teratas)</h2>
+      <p class="hint">Menampilkan 10 kota/kabupaten dengan jumlah customer terbanyak. Kota/kabupaten dideteksi otomatis dari teks Alamat &amp; Kecamatan. Klik salah satu untuk melihat rincian kecamatan &amp; alamat pengerjaan di dalamnya.</p>
       <div id="statsKecamatan"><div class="empty">Buka tab ini untuk memuat data.</div></div>
     </div>
   </section>
@@ -395,14 +384,24 @@
   let ALL_CUSTOMERS = [];
   let ALL_ORDERS = [];
   let CURRENT_ROWS = [];
+  let DATA_LOADED = false; // cache: sekali dimuat, pindah tab tidak perlu fetch ulang
 
   // ---------- Tabs ----------
   function switchTab(name){
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
     document.getElementById('tab-'+name).classList.add('active');
-    if(name==='list') loadCustomers();
-    if(name==='stats') loadCustomers().then(renderStats);
+    if(name==='list') loadCustomers().then(ok=>{ if(ok) renderTable(); });
+    if(name==='stats') loadCustomers().then(ok=>{ if(ok) renderStats(); });
+  }
+
+  // Muat ulang paksa dari server (tombol "Muat Ulang" / setelah koneksi diubah).
+  function refreshCustomers(){
+    loadCustomers(true).then(ok=>{
+      if(!ok) return;
+      renderTable();
+      if(document.getElementById('tab-stats').classList.contains('active')) renderStats();
+    });
   }
 
   // ---------- Settings ----------
@@ -414,9 +413,11 @@
   function saveSettings(){
     API_URL = document.getElementById('apiUrlInput').value.trim();
     localStorage.setItem('crm_api_url', API_URL);
+    DATA_LOADED = false;
     closeSettings();
     showToast('Koneksi disimpan');
-    if(document.getElementById('tab-list').classList.contains('active')) loadCustomers();
+    if(document.getElementById('tab-list').classList.contains('active')) loadCustomers().then(ok=>{ if(ok) renderTable(); });
+    if(document.getElementById('tab-stats').classList.contains('active')) loadCustomers().then(ok=>{ if(ok) renderStats(); });
   }
 
   // ---------- Detail customer & riwayat order ----------
@@ -462,7 +463,9 @@
       const res = await postAction({ action:'deleteOrder', noWa, ts });
       if(res.ok){
         showToast('Riwayat order dihapus');
-        await loadCustomers();
+        await loadCustomers(true);
+        renderTable();
+        if(document.getElementById('tab-stats').classList.contains('active')) renderStats();
         if(DETAIL_WA) openDetail(DETAIL_WA);
       } else {
         showToast('Gagal: ' + (res.error||'tidak diketahui'));
@@ -481,7 +484,9 @@
       if(res.ok){
         showToast('Customer dihapus');
         closeDetail();
-        await loadCustomers();
+        await loadCustomers(true);
+        renderTable();
+        if(document.getElementById('tab-stats').classList.contains('active')) renderStats();
       } else {
         showToast('Gagal: ' + (res.error||'tidak diketahui'));
       }
@@ -529,6 +534,7 @@
         } else {
           setMsg('formMsg', 'Tersimpan.', true);
           document.getElementById('customerForm').reset();
+          DATA_LOADED = false; // pastikan data terbaru diambil saat buka tab Daftar/Statistik
         }
       } else {
         setMsg('formMsg', 'Gagal: '+(res.error||'tidak diketahui'), false);
@@ -543,46 +549,6 @@
     const el = document.getElementById(id);
     el.textContent = text;
     el.className = ok ? 'ok' : 'err';
-  }
-
-  // ---------- Bulk upload ----------
-  function uploadBulk(){
-    if(!requireApi()) return;
-    const fileInput = document.getElementById('bulkFile');
-    const file = fileInput.files[0];
-    if(!file){ setMsg('bulkMsg','Pilih file CSV dulu.', false); return; }
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const records = results.data
-          .map(r => ({
-            nama: (r.nama||'').trim(),
-            noWa: (r.noWa||r.no_wa||r.wa||'').trim(),
-            alamat: (r.alamat||'').trim(),
-            kecamatan: (r.kecamatan||'').trim(),
-            tanggal: (r.tanggal||'').trim(),
-            value: Number(r.value)||0
-          }))
-          .filter(r => r.nama && r.noWa);
-
-        if(records.length===0){ setMsg('bulkMsg','Tidak ada baris valid ditemukan.', false); return; }
-
-        setMsg('bulkMsg', `Mengupload ${records.length} baris...`, true);
-        try{
-          const res = await postRecords(records);
-          if(res.ok){
-            setMsg('bulkMsg', `Selesai. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (no WA kosong): ${res.skipped}, ditolak (tanggal lebih lama): ${res.rejectedOldDate||0}, ditolak (tanggal masa depan): ${res.rejectedFutureDate||0}.`, true);
-            fileInput.value = '';
-          } else {
-            setMsg('bulkMsg', 'Gagal: '+(res.error||'tidak diketahui'), false);
-          }
-        }catch(err){
-          setMsg('bulkMsg','Gagal terhubung ke server. Cek URL Web App.', false);
-        }
-      }
-    });
   }
 
   // ---------- Import dari spreadsheet lain ----------
@@ -911,7 +877,7 @@
           kecamatan: String(c.kecamatan||'').trim()
         });
       });
-      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length);
+      const entries = Object.entries(groups).sort((a,b)=> b[1].length - a[1].length).slice(0, 10);
       const kecEl = document.getElementById('statsKecamatan');
       kecEl.innerHTML = entries.length ? entries.map(([kota, list])=>`
         <details class="kec-group">
@@ -930,8 +896,11 @@
   }
 
   // ---------- List / filter ----------
-  async function loadCustomers(){
-    if(!requireApi()) return;
+  // force=true untuk memaksa ambil ulang dari server (abaikan cache).
+  // Return true kalau data siap dipakai (dari cache ATAU berhasil fetch baru).
+  async function loadCustomers(force){
+    if(!requireApi()) return false;
+    if(DATA_LOADED && !force) return true;
     const body = document.getElementById('customerTableBody');
     body.innerHTML = '<tr><td colspan="6" class="empty">Memuat data...</td></tr>';
     try{
@@ -940,9 +909,11 @@
       if(!data.ok) throw new Error(data.error);
       ALL_CUSTOMERS = data.customers || [];
       ALL_ORDERS = data.orders || [];
-      renderTable();
+      DATA_LOADED = true;
+      return true;
     }catch(err){
       body.innerHTML = '<tr><td colspan="6" class="empty">Gagal memuat data. Cek URL Web App di Pengaturan koneksi.</td></tr>';
+      return false;
     }
   }
 
