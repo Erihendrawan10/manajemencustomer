@@ -81,7 +81,7 @@
         <h2 class="font-display font-bold text-lg">Data Customer</h2>
         <p class="text-sm text-muted mt-1 mb-5 leading-relaxed">
           Jika nomor WhatsApp sudah pernah ada, data lama akan otomatis ditimpa dengan data terbaru ini.
-          Input akan ditolak jika: tanggal pengerjaan lebih lama dari data yang sudah tersimpan, atau tanggal pengerjaan berada di masa depan.
+          Input akan ditolak/dilewati jika: tanggal pengerjaan lebih lama dari data yang sudah tersimpan, tanggal pengerjaan berada di masa depan, atau order dengan No. WA + tanggal + value yang persis sama sudah pernah tersimpan sebelumnya (mencegah dobel kalau tidak sengaja disimpan/diimport berkali-kali).
         </p>
 
         <form @submit.prevent="submitForm" class="space-y-4">
@@ -404,7 +404,7 @@
     </div>
   </transition>
 
-  <div class="text-center text-muted text-[11px] py-5">Manajemen Customer.25</div>
+  <div class="text-center text-muted text-[11px] py-5">Manajemen Customer.26</div>
 
 </div>
 
@@ -838,6 +838,8 @@ createApp({
             this.setFormMsg('Ditolak: tanggal pengerjaan tidak boleh di masa depan.', false);
           } else if(res.rejectedOldDate > 0){
             this.setFormMsg('Ditolak: tanggal pengerjaan lebih lama dari data yang sudah tersimpan.', false);
+          } else if(res.rejectedDuplicate > 0){
+            this.setFormMsg('Dilewati: order dengan No. WA, tanggal, dan value yang persis sama sudah pernah tersimpan.', false);
           } else {
             this.setFormMsg('Tersimpan.', true);
             this.form = { nama:'', wa:'', alamat:'', kecamatan:'', tanggal:'', value: null };
@@ -860,7 +862,7 @@ createApp({
       try{
         const res = await this.postAction({ action: 'importExternal' });
         if(res.ok){
-          this.setImportMsg(`Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (Status: Done): ${res.doneSkipped||0}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}.`, true);
+          this.setImportMsg(`Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (Status: Done): ${res.doneSkipped||0}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}, dilewati (duplikat, sudah pernah diimport): ${res.rejectedDuplicate||0}.`, true);
           this.importChangedCustomers = res.changedCustomers || [];
           this.dataLoaded = false;
         } else {
