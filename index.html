@@ -142,6 +142,22 @@
           </button>
           <span class="text-sm" :class="importMsg.ok ? 'text-primary-600' : 'text-danger-500'">{{ importMsg.text }}</span>
         </div>
+
+        <div v-if="importChangedCustomers.length" class="mt-4 pt-4 border-t border-line">
+          <p class="text-xs font-semibold text-ink/70 mb-2.5">
+            Customer baru / diperbarui dari import ini ({{ importChangedCustomers.length }}) — klik nama untuk lihat di Daftar Customer:
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button v-for="c in importChangedCustomers" :key="c.wa" @click="goToCustomerInList(c.wa)"
+              class="flex items-center gap-1.5 text-xs font-medium bg-paper border border-line rounded-full pl-3 pr-2.5 py-1.5 hover:border-primary-400 hover:text-primary-600 transition-colors">
+              <span>{{ c.nama || ('+'+c.wa) }}</span>
+              <span class="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                :class="c.status==='added' ? 'bg-primary-100 text-primary-700' : 'bg-rust-400/20 text-rust-600'">
+                {{ c.status==='added' ? 'baru' : 'update' }}
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -662,6 +678,7 @@ createApp({
 
       importMsg: { text:'', ok:true },
       importing: false,
+      importChangedCustomers: [],
 
       filterFrom: '',
       filterTo: '',
@@ -838,11 +855,14 @@ createApp({
     async importExternal(){
       if(!this.requireApi()) return;
       this.importing = true;
+      this.importChangedCustomers = [];
       this.setImportMsg('Mengimport, mohon tunggu (bisa beberapa menit kalau datanya banyak)...', true);
       try{
         const res = await this.postAction({ action: 'importExternal' });
         if(res.ok){
           this.setImportMsg(`Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (Status: Done): ${res.doneSkipped||0}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}.`, true);
+          this.importChangedCustomers = res.changedCustomers || [];
+          this.dataLoaded = false;
         } else {
           this.setImportMsg('Gagal: '+(res.error||'tidak diketahui')+'. Kalau ini percobaan pertama, coba jalankan fungsi importFromExternalSheet manual dulu dari Apps Script untuk memberi izin akses (lihat README).', false);
         }
@@ -900,6 +920,21 @@ createApp({
       this.detailModalOpen = true;
     },
     closeDetail(){ this.detailModalOpen = false; this.detailWa = null; },
+
+    /** Dipanggil saat klik nama customer di daftar "baru/diperbarui" hasil import:
+     * pindah ke tab Daftar Customer, muat ulang datanya, lalu langsung buka detail customer itu. */
+    async goToCustomerInList(noWa){
+      this.activeTab = 'list';
+      const ok = await this.loadCustomers(true);
+      if(ok){
+        const c = this.allCustomers.find(x => x.noWa === noWa);
+        if(c){
+          this.openDetail(noWa);
+        } else {
+          this.showToast('Customer tidak ditemukan di Daftar Customer');
+        }
+      }
+    },
 
     async deleteHistoryEntry(noWa, ts){
       if(!this.requireApi()) return;
