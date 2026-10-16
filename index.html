@@ -132,7 +132,7 @@
         <h2 class="font-display font-bold text-lg">Import dari Spreadsheet Lain</h2>
         <p class="text-sm text-muted mt-1 mb-5 leading-relaxed">
           Menarik data order dari spreadsheet terpisah (tab per tanggal). Judul kolom harus di baris 1 (kolom dicari berdasarkan nama judulnya, bukan urutan — kolom tanpa judul otomatis diabaikan).
-          Baris dilewati kalau: kolom Value kosong, atau ada kolom "Status" berisi "Done".
+          Baris dilewati kalau: kolom Value kosong, atau order dengan No. WA + tanggal + value yang persis sama sudah pernah tersimpan (tidak akan dobel walau diimport berulang kali).
           Percobaan pertama kali mungkin perlu dijalankan manual dulu dari Apps Script untuk izin akses — lihat README.
         </p>
         <div class="flex items-center gap-3 flex-wrap">
@@ -378,13 +378,38 @@
               </thead>
               <tbody>
                 <tr v-if="detailHistory.length===0"><td colspan="3" class="text-center text-muted py-8">Belum ada riwayat order.</td></tr>
-                <tr v-for="o in detailHistory" :key="o.ts" class="border-t border-line">
-                  <td class="px-3.5 py-2.5">{{ o.tanggal || '-' }}</td>
-                  <td class="px-3.5 py-2.5 font-semibold tabular-nums">Rp {{ fmtInt(o.value) }}</td>
-                  <td class="px-3.5 py-2.5 text-right">
-                    <button @click="deleteHistoryEntry(o.noWa, o.ts)" class="border border-line text-danger-500 hover:bg-danger-50 text-xs font-semibold rounded-lg px-2.5 py-1 transition-colors">Hapus</button>
-                  </td>
-                </tr>
+                <template v-for="o in detailHistory" :key="o.ts">
+                  <tr class="border-t border-line">
+                    <td class="px-3.5 py-2.5">{{ o.tanggal || '-' }}</td>
+                    <td class="px-3.5 py-2.5 font-semibold tabular-nums">Rp {{ fmtInt(o.value) }}</td>
+                    <td class="px-3.5 py-2.5 text-right whitespace-nowrap">
+                      <button @click="startEditOrder(o)" class="border border-line text-primary-700 hover:bg-primary-50 text-xs font-semibold rounded-lg px-2.5 py-1 transition-colors mr-1.5">Edit</button>
+                      <button @click="deleteHistoryEntry(o.noWa, o.ts)" class="border border-line text-danger-500 hover:bg-danger-50 text-xs font-semibold rounded-lg px-2.5 py-1 transition-colors">Hapus</button>
+                    </td>
+                  </tr>
+                  <tr v-if="editingTs===o.ts" class="bg-paper/60">
+                    <td colspan="3" class="px-3.5 py-3">
+                      <div class="grid sm:grid-cols-3 gap-2.5">
+                        <div>
+                          <label class="block text-[11px] font-semibold text-ink/70 mb-1">Nama</label>
+                          <input v-model.trim="editForm.nama" type="text" class="w-full px-3 py-2 rounded-lg border border-line bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/25 focus:border-primary-400">
+                        </div>
+                        <div>
+                          <label class="block text-[11px] font-semibold text-ink/70 mb-1">No. WhatsApp</label>
+                          <input v-model.trim="editForm.wa" type="text" class="w-full px-3 py-2 rounded-lg border border-line bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/25 focus:border-primary-400">
+                        </div>
+                        <div>
+                          <label class="block text-[11px] font-semibold text-ink/70 mb-1">Value (Rp)</label>
+                          <input v-model.number="editForm.value" type="number" min="0" step="1000" class="w-full px-3 py-2 rounded-lg border border-line bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/25 focus:border-primary-400">
+                        </div>
+                      </div>
+                      <div class="flex justify-end gap-2 mt-3">
+                        <button @click="cancelEditOrder" class="border border-line hover:border-primary-400 text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors">Batal</button>
+                        <button @click="saveEditOrder(o)" :disabled="editSaving" class="bg-primary-500 hover:bg-primary-600 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors">Simpan Perubahan</button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
@@ -687,6 +712,10 @@ createApp({
       detailModalOpen: false,
       detailWa: null,
 
+      editingTs: null,
+      editForm: { nama:'', wa:'', value:0 },
+      editSaving: false,
+
       toast: { text:'', show:false }
     };
   },
@@ -862,7 +891,7 @@ createApp({
       try{
         const res = await this.postAction({ action: 'importExternal' });
         if(res.ok){
-          this.setImportMsg(`Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (Status: Done): ${res.doneSkipped||0}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}, dilewati (duplikat, sudah pernah diimport): ${res.rejectedDuplicate||0}.`, true);
+          this.setImportMsg(`Selesai. Tab diproses: ${res.tabsProcessed}. Baru: ${res.added}, diperbarui: ${res.updated}, dilewati (WA kosong): ${res.skipped}, dilewati (belum ada value): ${res.noValue}, dilewati (tanggal tidak valid): ${res.invalidDate}, ditolak (tanggal lebih lama): ${res.rejectedOldDate}, ditolak (tanggal masa depan): ${res.rejectedFutureDate}, dilewati (duplikat, sudah pernah diimport): ${res.rejectedDuplicate||0}.`, true);
           this.importChangedCustomers = res.changedCustomers || [];
           this.dataLoaded = false;
         } else {
@@ -921,7 +950,7 @@ createApp({
       this.detailWa = noWa;
       this.detailModalOpen = true;
     },
-    closeDetail(){ this.detailModalOpen = false; this.detailWa = null; },
+    closeDetail(){ this.detailModalOpen = false; this.detailWa = null; this.editingTs = null; },
 
     /** Dipanggil saat klik nama customer di daftar "baru/diperbarui" hasil import:
      * pindah ke tab Daftar Customer, muat ulang datanya, lalu langsung buka detail customer itu. */
@@ -936,6 +965,45 @@ createApp({
           this.showToast('Customer tidak ditemukan di Daftar Customer');
         }
       }
+    },
+
+    startEditOrder(o){
+      this.editingTs = o.ts;
+      this.editForm = { nama: o.nama || '', wa: o.noWa || '', value: Number(o.value) || 0 };
+    },
+    cancelEditOrder(){ this.editingTs = null; },
+
+    async saveEditOrder(o){
+      if(!this.requireApi()) return;
+      const nama = (this.editForm.nama||'').trim();
+      const wa = (this.editForm.wa||'').trim();
+      const value = Number(this.editForm.value);
+      if(!nama || !wa){ this.showToast('Nama dan No. WhatsApp wajib diisi'); return; }
+      if(isNaN(value) || value < 0){ this.showToast('Value tidak valid'); return; }
+
+      this.editSaving = true;
+      try{
+        const res = await this.postAction({
+          action: 'editOrder', noWa: o.noWa, ts: o.ts,
+          newNama: nama, newNoWa: wa, newValue: value
+        });
+        if(res.ok){
+          this.showToast('Order diperbarui');
+          this.editingTs = null;
+          await this.loadCustomers(true);
+          if(this.activeTab==='stats') this.statsReady = true;
+          // Kalau WA diganti, modal pindah ke customer dengan WA baru (kalau ada)
+          if(res.noWa && res.noWa !== this.detailWa){
+            if(this.allCustomers.find(x => x.noWa === res.noWa)) this.detailWa = res.noWa;
+            else this.closeDetail();
+          }
+        } else {
+          this.showToast('Gagal: ' + (res.error||'tidak diketahui'));
+        }
+      }catch(err){
+        this.showToast('Gagal terhubung ke server');
+      }
+      this.editSaving = false;
     },
 
     async deleteHistoryEntry(noWa, ts){
